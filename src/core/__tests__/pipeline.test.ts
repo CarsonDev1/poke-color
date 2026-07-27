@@ -38,6 +38,50 @@ function fourQuadrants(size = 64): RgbaImage {
   })
 }
 
+/**
+ * Ảnh có kích thước vùng trải rộng: cạnh khối chạy vòng qua 2,3,5,8,13 px
+ * theo cả hai trục (diện tích khối 4..169 px², gấp ~42 lần), màu mỗi khối
+ * chọn bằng hash tất định (không Math.random) của chỉ số khối trong palette
+ * 8 màu tách biệt rõ. Mục đích: khiến đường cong số-vùng theo minArea mịn
+ * dần đều thay vì nhảy bậc thô như fixture khối-đều-4x4 cũ — đây mới là ca
+ * bisection được thiết kế để xử lý (gần với ảnh chụp thật hơn).
+ */
+function variedBlocks(size = 128): RgbaImage {
+  const sizes = [2, 3, 5, 8, 13]
+  const colors: [number, number, number][] = [
+    [220, 30, 30],
+    [30, 200, 60],
+    [40, 70, 220],
+    [240, 230, 40],
+    [200, 40, 200],
+    [40, 200, 200],
+    [230, 130, 20],
+    [140, 90, 40],
+  ]
+
+  const blockIndexAt = (n: number): number[] => {
+    const idx = new Array<number>(n)
+    let pos = 0
+    let block = 0
+    while (pos < n) {
+      const len = sizes[block % sizes.length]
+      for (let i = 0; i < len && pos < n; i++, pos++) idx[pos] = block
+      block++
+    }
+    return idx
+  }
+  const xBlock = blockIndexAt(size)
+  const yBlock = blockIndexAt(size)
+
+  return make(size, size, (x, y) => {
+    const bx = xBlock[x]
+    const by = yBlock[y]
+    // hash tất định (hằng số nhân số nguyên tố lớn) — không Math.random
+    const h = (bx * 2654435761 + by * 2246822519) >>> 0
+    return colors[h % colors.length]
+  })
+}
+
 const params = (over: Partial<PipelineParams> = {}): PipelineParams => ({
   ...DEFAULT_PARAMS,
   ...over,
@@ -119,32 +163,33 @@ describe('runPipeline', () => {
     ])
   })
 
-  it('minArea auto đưa số vùng gần mục tiêu hơn so với không dò', () => {
-    // Fixture này chỉ có 5 màu rời rạc trên các khối 4x4 đều tăm tắp, nên từ
-    // khi median3x3 không còn bịa màu, đường cong số-vùng theo minArea trở
-    // thành một "cầu thang" thô: nhảy từ hơn trăm vùng thẳng xuống 9, không
-    // có bậc nào gần target=40. Một khoảng ±25% tuyệt đối quanh target là
-    // không thể thoả trên fixture này dù bisection chạy đúng — ảnh chụp thật
-    // có đường cong mịn hơn nhiều (nhiều vùng đủ mọi kích cỡ), đó mới là ca
-    // bisection được thiết kế để xử lý. Nên so sánh tương đối: auto phải đưa
-    // số vùng gần target hơn hẳn so với không dò gì (minArea = 1) — đó là
-    // đúng cái bisection cam kết, bất kể cầu thang thô đến đâu.
-    const img = make(96, 96, (x, y) => {
-      const v = ((Math.floor(x / 4) * 37 + Math.floor(y / 4) * 61) % 5) * 50
-      return [v, 255 - v, (v * 2) % 256]
-    })
+  it('minArea auto hội tụ về gần targetRegions trong sai số ±25% (fixture vùng đa kích cỡ)', () => {
+    // Fixture cũ (khối 4x4 đều tăm tắp, 5 màu) cho đường cong số-vùng theo
+    // minArea là một cầu thang thô (nhảy thẳng 788 → 9 quanh target=40), nên
+    // một khoảng tuyệt đối quanh target là không thể thoả dù bisection chạy
+    // đúng: gần như MỌI usedMinArea > 1 đều thoả assertion tương đối yếu hơn,
+    // nên bài test trước không phân biệt được "bisection hội tụ tốt" với
+    // "bisection chạy tệ nhưng còn hơn không chạy". `variedBlocks` khắc phục
+    // gốc rễ: diện tích khối trải rộng 4..169 px² khiến đường cong mịn dần
+    // đều. Đo thực nghiệm (k=8, nhiều targetRegions khác nhau) xác nhận:
+    //   target=30 → count=27  (err=3,  10.0%)
+    //   target=40 → count=45  (err=5,  12.5%)
+    //   target=45 → count=45  (err=0,   0.0%)
+    //   target=50 → count=45  (err=5,  10.0%)
+    //   target=65 → count=77  (err=12, 18.5%)
+    //   target=87 → count=85  (err=2,   2.3%)
+    //   target=100 → count=87 (err=13, 13.0%)
+    //   target=150 → count=129(err=21, 14.0%)
+    // Sai số tệ nhất đo được là 18.5% (target=65) — luôn nằm trong ±25%, đúng
+    // bằng TARGET_TOLERANCE mà bisectMinArea tự đặt ra cho chính nó. Giữ
+    // targetRegions=40 (không đổi so với kế hoạch gốc) vì fixture mới đạt
+    // err=5 (12.5%) tại đó — hội tụ tốt, không phải một cú trùng hợp err=0.
+    const img = variedBlocks()
+    const targetRegions = 40
+    const r = runPipeline(img, params({ k: 8, minArea: 'auto', targetRegions }))
 
-    const auto = runPipeline(img, params({ k: 8, minArea: 'auto', targetRegions: 40 }))
-    const baseline = runPipeline(img, params({ k: 8, minArea: 1 }))
-
-    const autoCount = auto.puzzle.regions.length
-    const baselineCount = baseline.puzzle.regions.length
-
-    expect(Math.abs(autoCount - 40)).toBeLessThan(Math.abs(baselineCount - 40))
-    expect(auto.usedMinArea).toBeGreaterThan(1)
-    // gộp vùng chỉ có thể giảm hoặc giữ nguyên số vùng, không bao giờ tăng
-    expect(autoCount).toBeGreaterThanOrEqual(2)
-    expect(autoCount).toBeLessThanOrEqual(baselineCount)
+    expect(r.usedMinArea).toBeGreaterThan(1)
+    expect(Math.abs(r.puzzle.regions.length - targetRegions)).toBeLessThanOrEqual(targetRegions * 0.25)
   })
 
   it('minArea số cụ thể thì dùng đúng số đó, không dò', () => {
