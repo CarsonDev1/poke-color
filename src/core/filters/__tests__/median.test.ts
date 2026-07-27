@@ -66,4 +66,54 @@ describe('median3x3', () => {
     expect(Array.from(out.data)).toEqual(Array.from(img.data))
     expect(out.data).not.toBe(img.data)
   })
+
+  it('KHÔNG BAO GIỜ bịa màu: mọi màu output đều tồn tại trong ảnh input', () => {
+    // 4 góc 4 màu + nhiễu xác định — cùng dạng với fixture của pipeline
+    const w = 32
+    const h = 32
+    const colors: [number, number, number][] = [
+      [220, 30, 30],
+      [30, 200, 60],
+      [40, 70, 220],
+      [240, 230, 40],
+    ]
+    const img = solid(w, h, [0, 0, 0])
+    for (let y = 0; y < h; y++) {
+      for (let x = 0; x < w; x++) {
+        const q = (y < h / 2 ? 0 : 2) + (x < w / 2 ? 0 : 1)
+        const c = colors[q]
+        const n = ((x * 7 + y * 13) % 5) - 2
+        const i = (y * w + x) * 4
+        img.data[i] = c[0] + n
+        img.data[i + 1] = c[1] + n
+        img.data[i + 2] = c[2] + n
+      }
+    }
+
+    const inputColors = new Set<string>()
+    for (let i = 0; i < w * h; i++) {
+      inputColors.add(`${img.data[i * 4]},${img.data[i * 4 + 1]},${img.data[i * 4 + 2]}`)
+    }
+
+    const out = median3x3(img, 2)
+
+    const invented: string[] = []
+    for (let i = 0; i < w * h; i++) {
+      const key = `${out.data[i * 4]},${out.data[i * 4 + 1]},${out.data[i * 4 + 2]}`
+      if (!inputColors.has(key)) invented.push(key)
+    }
+
+    expect(invented).toEqual([])
+  })
+
+  it('vẫn khử được pixel nhiễu đơn lẻ sau khi snap', () => {
+    const img = solid(5, 5, [10, 20, 30])
+    const c = (2 * 5 + 2) * 4
+    img.data[c] = 250
+    img.data[c + 1] = 250
+    img.data[c + 2] = 250
+
+    const out = median3x3(img, 1)
+    expect(px(out, 2, 2)).toEqual([10, 20, 30])
+  })
 })

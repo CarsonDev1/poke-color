@@ -84,17 +84,7 @@ describe('resizeToMaxDim', () => {
 
 describe('runPipeline', () => {
   it('ảnh 4 góc 4 màu → khoảng 4 vùng', () => {
-    // k=5, không phải 4: với k đúng bằng 4 (khớp chính xác số màu thật, không
-    // dư), Stage 1 (median3x3, per-channel, cố định 2 lượt) tạo vài chục pixel
-    // pha trộn dọc biên giữa các góc; các pixel đó đủ lệch để median-cut ở
-    // Stage 2 tách nhầm một góc thành 2 cụm gần giống hệt nhau thay vì tách
-    // đúng cặp góc màu gần nhau nhất (đã xác minh bằng cách trace từng bước:
-    // trên ảnh gốc chưa lọc thì k=4 tách đúng 4/4; ngay sau median3x3 (trước cả
-    // bilateral) thì đã sai — lỗi nằm ở tương tác Stage 1 × Stage 2 khi k sát
-    // nút, không phải ở cách pipeline.ts ghép các stage). Dư 1 cụm (k=5) là đủ
-    // để cụm pha trộn có chỗ riêng, không cướp cụm của một góc thật; vùng nhỏ
-    // dư ra bị minArea=40 gộp lại nên vẫn ra đúng 4 vùng.
-    const r = runPipeline(fourQuadrants(), params({ k: 5, minArea: 40, targetRegions: 4 }))
+    const r = runPipeline(fourQuadrants(), params({ k: 4, minArea: 40, targetRegions: 4 }))
     expect(r.puzzle.regions.length).toBeGreaterThanOrEqual(4)
     expect(r.puzzle.regions.length).toBeLessThanOrEqual(8)
   })
