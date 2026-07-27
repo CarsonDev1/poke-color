@@ -1072,6 +1072,12 @@ Expected: FAIL — không resolve được import
 
 - [ ] **Step 3: Implement**
 
+> ⚠️ **Code dưới đây CÓ BUG — đã phát hiện và sửa lúc thực thi (commit `3118164`).** Việc cắt tại **count-median** (`sorted.length >> 1`) rơi vào giữa một dải pixel có giá trị trục **bằng nhau**, nên nhát cắt không tách được gì: cả hai hộp con đều còn chứa giá trị đó. Với 3 cụm màu rời rạc kích thước bằng nhau và `k=3`, kết quả ra hộp `15/15/30` và hai trong ba centroid là **màu pha**, không phải màu thuần — Test 2 fail. Lỗi này chắc chắn xảy ra với mọi số cụm lẻ ≥3 có kích thước bằng nhau, và ảnh pixel-art/sprite thì đầy dải màu phẳng như vậy.
+>
+> **Cách sửa đã áp dụng:** cắt tại **biên giá trị gần median nhất** (`nearestValueBoundary`) thay vì tại count-median. Chỉ quét `j` trong `[1, length-1]` nên không bao giờ sinh hộp rỗng; tie giữa hai biên cách đều được phá bằng so sánh `<` khi quét tăng dần nên chỉ số nhỏ hơn thắng ⇒ vẫn deterministic. Hộp có `spread <= 0` đã bị lọc trước khi tới đây nên trường hợp "trục rộng nhất chỉ có một giá trị" không thể xảy ra.
+>
+> Nếu thực thi lại task này, hãy đọc code đã commit thay vì code dưới đây.
+
 `src/core/quantize/median-cut.ts`:
 
 ```ts
