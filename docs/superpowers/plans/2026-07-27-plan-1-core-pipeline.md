@@ -9772,3 +9772,155 @@ Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>"
 - `PipelineParams.minArea` là `number | 'auto'`; T24 truyền `'auto'` khi sinh, T28 lưu số cụ thể vào `params` để Plan 4 replay được.
 - `WorkerLike` (T23) khớp đúng tập phương thức mà T17 dùng.
 - `checkQuality` ngưỡng `MAX_GOOD_REGIONS`/`MIN_GOOD_REGIONS` chỉ khai báo một chỗ (T24), test khoá giá trị khớp spec.
+
+---
+
+### Task 30: Median không được bịa màu — snap về màu gốc trong cửa sổ
+
+> **Task bổ sung, chèn ngoài thứ tự.** Phát hiện khi thực thi Task 15 và được chủ dự án phê duyệt sửa gốc. Đánh số 30 để không phải đổi số Task 16–29 (việc đó sẽ làm sai mọi brief và ledger đã sinh).
+
+**Files:**
+- Modify: `src/core/filters/median.ts`
+- Modify: `src/core/filters/__tests__/median.test.ts`
+- Modify: `src/core/__tests__/pipeline.test.ts` — trả `k` của test `'ảnh 4 góc 4 màu → khoảng 4 vùng'` về **4**
+
+**Interfaces:**
+- Consumes: `RgbaImage` (Task 2)
+- Produces: `median3x3(img: RgbaImage, passes: number): RgbaImage` — chữ ký **không đổi**, chỉ đổi hành vi bên trong
+
+**Vấn đề.** `median3x3` lấy median **từng kênh độc lập** (marginal median). Ở biên hai vùng màu, kênh đỏ có thể lấy từ vùng này còn kênh lục lấy từ vùng kia, nên hàm **sinh ra màu chưa từng tồn tại trong ảnh gốc**. Trên fixture `fourQuadrants` 64×64, việc này tạo 30 màu mới (ví dụ `[218,69,41]`), một trong số đó thắng hẳn một cluster k-means 31 pixel — và hệ quả là xanh lá `[30,200,60]` với vàng `[240,230,40]` bị nhập thành một vùng 2048 pixel màu `[159,217,52]`.
+
+Hai cách bào chữa đã bị chứng minh sai bằng đo đạc: hiện tượng **không** loãng đi khi phóng ảnh (giữ nguyên ở 64/128/256px, vì nó là tính chất cấu trúc của thứ tự chia hộp median-cut chứ không phải nhiễu biên), và Stage 4 **không** dọn được (hai vùng bị nhập đều full-size, và chúng chưa từng được gán nhãn riêng ở Stage 2 nên không có gì để tách).
+
+**Cách sửa.** Sau khi tính median từng kênh cho một pixel, **không xuất trực tiếp giá trị đó**. Thay vào đó, chọn trong 9 màu gốc của cửa sổ 3×3 (lấy từ buffer nguồn của lượt đó) màu nào gần giá trị median nhất, rồi xuất màu đó. Đây là xấp xỉ rẻ của vector median: chỉ 9 phép tính khoảng cách mỗi pixel, so với 36 của vector median thật.
+
+Bảo đảm thu được: output của mỗi lượt chỉ chứa màu đã có trong input của lượt đó ⇒ bắc cầu qua cả 2 lượt, output cuối chỉ chứa màu đã có trong ảnh gốc. Không thể bịa màu.
+
+- [ ] **Step 1: Viết test mới cho bất biến "không bịa màu"**
+
+Thêm vào `src/core/filters/__tests__/median.test.ts`:
+
+```ts
+it('KHÔNG BAO GIỜ bịa màu: mọi màu output đều tồn tại trong ảnh input', () => {
+  // 4 góc 4 màu + nhiễu xác định — cùng dạng với fixture của pipeline
+  const w = 32
+  const h = 32
+  const colors: [number, number, number][] = [
+    [220, 30, 30],
+    [30, 200, 60],
+    [40, 70, 220],
+    [240, 230, 40],
+  ]
+  const img = solid(w, h, [0, 0, 0])
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      const q = (y < h / 2 ? 0 : 2) + (x < w / 2 ? 0 : 1)
+      const c = colors[q]
+      const n = ((x * 7 + y * 13) % 5) - 2
+      const i = (y * w + x) * 4
+      img.data[i] = c[0] + n
+      img.data[i + 1] = c[1] + n
+      img.data[i + 2] = c[2] + n
+    }
+  }
+
+  const inputColors = new Set<string>()
+  for (let i = 0; i < w * h; i++) {
+    inputColors.add(`${img.data[i * 4]},${img.data[i * 4 + 1]},${img.data[i * 4 + 2]}`)
+  }
+
+  const out = median3x3(img, 2)
+
+  const invented: string[] = []
+  for (let i = 0; i < w * h; i++) {
+    const key = `${out.data[i * 4]},${out.data[i * 4 + 1]},${out.data[i * 4 + 2]}`
+    if (!inputColors.has(key)) invented.push(key)
+  }
+
+  expect(invented).toEqual([])
+})
+
+it('vẫn khử được pixel nhiễu đơn lẻ sau khi snap', () => {
+  const img = solid(5, 5, [10, 20, 30])
+  const c = (2 * 5 + 2) * 4
+  img.data[c] = 250
+  img.data[c + 1] = 250
+  img.data[c + 2] = 250
+
+  const out = median3x3(img, 1)
+  expect(px(out, 2, 2)).toEqual([10, 20, 30])
+})
+```
+
+- [ ] **Step 2: Chạy test để chắc là test đầu FAIL với code hiện tại**
+
+Run (PowerShell): `npx vitest run src/core/filters/__tests__/median.test.ts`
+Expected: test `'KHÔNG BAO GIỜ bịa màu'` FAIL, `invented` là một mảng không rỗng. **Ghi lại danh sách màu bịa thực tế vào report** — đó là bằng chứng defect có thật.
+
+- [ ] **Step 3: Sửa `median3x3`**
+
+Trong vòng lặp pixel, sau khi có `mr`/`mg`/`mb` là median từng kênh, chọn màu gốc gần nhất trong cửa sổ:
+
+```ts
+// Median từng kênh có thể sinh ra màu KHÔNG tồn tại trong ảnh (marginal median):
+// kênh đỏ lấy từ pixel này, kênh lục lấy từ pixel kia. Ở biên hai vùng màu, màu
+// bịa đó có thể thắng hẳn một cluster k-means ở Stage 2 và làm hai màu thật bị
+// nhập thành một vùng màu pha — đã đo được trên ảnh 4 màu với k=4.
+// Cách chặn: snap về màu GỐC gần nhất trong 9 pixel của cửa sổ. Chỉ 9 phép tính
+// khoảng cách mỗi pixel, rẻ hơn nhiều so với vector median thật (36 phép).
+let bestIdx = 0
+let bestDist = Infinity
+for (let k = 0; k < 9; k++) {
+  const dr = winR[k] - mr
+  const dg = winG[k] - mg
+  const db = winB[k] - mb
+  const d = dr * dr + dg * dg + db * db
+  // `<` chứ không `<=` ⇒ tie luôn về chỉ số cửa sổ nhỏ hơn (deterministic)
+  if (d < bestDist) {
+    bestDist = d
+    bestIdx = k
+  }
+}
+dst[o] = winR[bestIdx]
+dst[o + 1] = winG[bestIdx]
+dst[o + 2] = winB[bestIdx]
+```
+
+Cấu trúc lại vòng lặp để thu ba mảng cửa sổ `winR`/`winG`/`winB` (mỗi mảng 9 phần tử, cấp phát một lần ngoài vòng lặp, **không** cấp phát mỗi pixel) cùng lúc với việc thu buffer để tính median. Khoảng cách dùng bình phương Euclid trong RGB — không cần `sqrt`, và không cần Lab vì 9 màu này vốn đã gần nhau.
+
+Giữ nguyên: chữ ký, tính không sửa input, `passes = 0` trả bản sao, biên kẹp toạ độ, alpha đi qua nguyên vẹn, mỗi lượt đọc từ snapshot ổn định và ghi sang buffer riêng.
+
+- [ ] **Step 4: Chạy lại test median**
+
+Run (PowerShell): `npx vitest run src/core/filters/__tests__/median.test.ts`
+Expected: tất cả pass, gồm cả test bịa màu và 5 test cũ (khử nhiễu, vùng phẳng không đổi, giữ cạnh, không sửa input, `passes = 0`).
+
+- [ ] **Step 5: Trả `k` của test pipeline về 4 — đây là tiêu chí nghiệm thu thật**
+
+Trong `src/core/__tests__/pipeline.test.ts`, test `'ảnh 4 góc 4 màu → khoảng 4 vùng'`: đổi `k: 5` về `k: 4`, và xoá đoạn comment giải thích lý do phải dùng 5 (nó không còn đúng nữa). Giữ nguyên `minArea: 40`, `targetRegions: 4` và hai assertion `>= 4`, `<= 8`.
+
+Run (PowerShell): `npx vitest run src/core/__tests__/pipeline.test.ts`
+Expected: pass, và số vùng phải là **4** chứ không phải 3. Ghi số vùng thực tế vào report.
+
+- [ ] **Step 6: Toàn bộ suite + typecheck**
+
+Run (PowerShell): `npm test` → Expected: all passed
+Run (PowerShell): `npm run typecheck` → Expected: không lỗi
+
+Nếu có test nào khác vỡ vì Stage 1 giờ cho output khác, **báo lại chứ không sửa test đó** — đó là thông tin quan trọng.
+
+- [ ] **Step 7: Commit**
+
+```bash
+git add src/core/filters/median.ts src/core/filters/__tests__/median.test.ts src/core/__tests__/pipeline.test.ts
+git commit -m "fix(core): median không bịa màu, snap về màu gốc trong cửa sổ
+
+Median từng kênh sinh ra màu không tồn tại trong ảnh gốc ở biên hai vùng.
+Màu bịa đó thắng được cả một cluster k-means và làm hai màu thật bị nhập
+thành một vùng màu pha. Snap kết quả về màu gốc gần nhất trong cửa sổ 3x3
+chặn tận gốc, và trả được test pipeline về k=4.
+
+Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>"
+```
+
+---
