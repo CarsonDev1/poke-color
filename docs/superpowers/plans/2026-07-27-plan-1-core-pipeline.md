@@ -9754,7 +9754,7 @@ Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>"
 | §18 test bất biến + determinism | T8, T10, T11, T12, T15 | |
 | §21 kiểm tra tay | T29 Step 6 | |
 
-**Ngoài phạm vi Plan 1, đã có kế hoạch riêng:** Supabase/auth/sync (Plan 2) · vector hoá + in (Plan 3) · editor sửa vùng (Plan 4) · chia sẻ + thống kê (Plan 5). Ba mục spec `§7`, `§9`, `§11`, `§12`, `§13` thuộc các plan đó.
+**Ngoài phạm vi Plan 1, đã có kế hoạch riêng:** §13 data model + §14 phần đồng bộ Supabase → Plan 2 · §7 vector hoá và in → Plan 3 · §9 editor sửa vùng → Plan 4 · §11 chia sẻ và §12 thống kê → Plan 5.
 
 **2. Placeholder scan** — không có "TBD", "TODO", "tương tự Task N", hay bước nào chỉ nói việc mà không có code. Mọi test đều là code chạy được; mọi hàm được gọi ở task sau đều được định nghĩa ở task trước.
 
