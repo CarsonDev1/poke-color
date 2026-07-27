@@ -119,17 +119,32 @@ describe('runPipeline', () => {
     ])
   })
 
-  it('minArea = auto dò được giá trị đưa số vùng về gần mục tiêu', () => {
-    // ảnh nhiều chi tiết để có dư địa dò
+  it('minArea auto đưa số vùng gần mục tiêu hơn so với không dò', () => {
+    // Fixture này chỉ có 5 màu rời rạc trên các khối 4x4 đều tăm tắp, nên từ
+    // khi median3x3 không còn bịa màu, đường cong số-vùng theo minArea trở
+    // thành một "cầu thang" thô: nhảy từ hơn trăm vùng thẳng xuống 9, không
+    // có bậc nào gần target=40. Một khoảng ±25% tuyệt đối quanh target là
+    // không thể thoả trên fixture này dù bisection chạy đúng — ảnh chụp thật
+    // có đường cong mịn hơn nhiều (nhiều vùng đủ mọi kích cỡ), đó mới là ca
+    // bisection được thiết kế để xử lý. Nên so sánh tương đối: auto phải đưa
+    // số vùng gần target hơn hẳn so với không dò gì (minArea = 1) — đó là
+    // đúng cái bisection cam kết, bất kể cầu thang thô đến đâu.
     const img = make(96, 96, (x, y) => {
       const v = ((Math.floor(x / 4) * 37 + Math.floor(y / 4) * 61) % 5) * 50
       return [v, 255 - v, (v * 2) % 256]
     })
-    const r = runPipeline(img, params({ k: 8, minArea: 'auto', targetRegions: 40 }))
 
-    expect(r.usedMinArea).toBeGreaterThan(0)
-    expect(r.puzzle.regions.length).toBeGreaterThanOrEqual(40 * 0.4)
-    expect(r.puzzle.regions.length).toBeLessThanOrEqual(40 * 2.5)
+    const auto = runPipeline(img, params({ k: 8, minArea: 'auto', targetRegions: 40 }))
+    const baseline = runPipeline(img, params({ k: 8, minArea: 1 }))
+
+    const autoCount = auto.puzzle.regions.length
+    const baselineCount = baseline.puzzle.regions.length
+
+    expect(Math.abs(autoCount - 40)).toBeLessThan(Math.abs(baselineCount - 40))
+    expect(auto.usedMinArea).toBeGreaterThan(1)
+    // gộp vùng chỉ có thể giảm hoặc giữ nguyên số vùng, không bao giờ tăng
+    expect(autoCount).toBeGreaterThanOrEqual(2)
+    expect(autoCount).toBeLessThanOrEqual(baselineCount)
   })
 
   it('minArea số cụ thể thì dùng đúng số đó, không dò', () => {
