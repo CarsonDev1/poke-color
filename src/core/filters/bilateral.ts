@@ -31,8 +31,9 @@ export function bilateral(
     }
   }
 
-  // bảng trọng số màu theo bình phương khác biệt, tính trước cho 0..255*255*3
-  const colorLut = new Float32Array(256 * 3)
+  // bảng trọng số màu theo bình phương khác biệt, tính trước cho 0..255 —
+  // diff là khoảng cách Chebyshev giữa hai kênh 0..255 nên không bao giờ vượt 255
+  const colorLut = new Float32Array(256)
   for (let d = 0; d < colorLut.length; d++) {
     colorLut[d] = Math.exp(-(d * d) / (2 * sigmaColor * sigmaColor))
   }

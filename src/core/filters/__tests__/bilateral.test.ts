@@ -39,18 +39,55 @@ describe('bilateral', () => {
     expect(right - left).toBeGreaterThan(255 * 0.9)
   })
 
-  it('làm phẳng gradient thoải: độ lệch giữa 2 pixel kề giảm', () => {
-    // gradient dốc 1 đơn vị mỗi pixel theo x
-    const img = make(32, 8, (x) => [x * 4, x * 4, x * 4])
-    const out = bilateral(img, 3, 3, 25)
+  it('làm phẳng gradient thoải có nhiễu: độ lệch giữa 2 pixel kề giảm mạnh', () => {
+    // Một gradient TUYỆT ĐỐI (không nhiễu) là điểm bất động của kernel này khi
+    // đo trong vùng nội bộ (không chạm biên): trung bình có trọng số đối xứng
+    // của một hàm tuyến tính tại điểm x luôn bằng chính giá trị tại x, nên
+    // phép đo "độ lệch kề nhau giảm" không đo được gì trên gradient thuần —
+    // đây là lỗ hổng của test cũ. Ảnh ở đây là gradient dốc 2/px CỘNG nhiễu
+    // xác định (không random): hệ số nhân của x (3) nguyên tố cùng nhau với
+    // modulus (11) nên phần dư đi qua nhiều giá trị khác nhau theo x, và biên
+    // độ nhiễu (tối đa ±5) đủ lớn hơn độ dốc (2) để tạo ra đảo chiều thật giữa
+    // các pixel kề nhau — nếu không có đảo chiều, tổng lệch tuyệt đối kề nhau
+    // chỉ đo hiệu số đầu-cuối (bất biến với mọi làm mượt), không đo được nhiễu.
+    const img = make(64, 16, (x, y) => {
+      const v = 2 * x + (((x * 3 + y * 5) % 11) - 5)
+      return [v, v, v]
+    })
+    const out = bilateral(img, 1)
 
+    // Đo tại hàng giữa (y=8), trong vùng x∈[16,47) — cách cả hai biên ảnh
+    // hơn bán kính kernel (radius=6) nên phép làm mượt ở đây thuần là hiệu
+    // ứng nội bộ, không lẫn hiệu ứng cắt biên.
     let before = 0
     let after = 0
-    for (let x = 8; x < 24; x++) {
-      before += Math.abs(px(img, x + 1, 4)[0] - px(img, x, 4)[0])
-      after += Math.abs(px(out, x + 1, 4)[0] - px(out, x, 4)[0])
+    for (let x = 16; x < 47; x++) {
+      before += Math.abs(px(img, x + 1, 8)[0] - px(img, x, 8)[0])
+      after += Math.abs(px(out, x + 1, 8)[0] - px(out, x, 8)[0])
     }
-    expect(after).toBeLessThan(before)
+    // Đo thực tế: before=163, after=62 (còn ~38%, tức giảm ~62%).
+    // Ngưỡng dưới đây (giảm còn dưới 50%) có biên an toàn rộng so với số đo.
+    expect(after).toBeLessThan(before * 0.5)
+  })
+
+  it('thành phần màu là thứ giữ cạnh: sigmaColor rất lớn thì cạnh bị nhoè', () => {
+    // sigmaColor cực lớn làm gauss(khác biệt màu) ≈ 1 với mọi khác biệt, tức
+    // suy biến bilateral thành Gaussian không gian thuần (blur) — đúng lỗi mà
+    // kế hoạch cảnh báo. Test này khoá cả hai đầu: mặc định giữ cạnh, còn khi
+    // suy biến thành blur thì cạnh phải sập.
+    const img = make(16, 16, (x) => (x < 8 ? [0, 0, 0] : [255, 255, 255]))
+
+    const outDefault = bilateral(img, 2)
+    const leftDefault = px(outDefault, 6, 8)[0]
+    const rightDefault = px(outDefault, 9, 8)[0]
+    expect(rightDefault - leftDefault).toBeGreaterThan(255 * 0.9)
+
+    const outBlur = bilateral(img, 2, 3, 100000)
+    const leftBlur = px(outBlur, 6, 8)[0]
+    const rightBlur = px(outBlur, 9, 8)[0]
+    // Đo thực tế: contrast còn lại ~29.4% (75/255) khi sigmaColor=100000 —
+    // sập rõ rệt so với ngưỡng 90%. Ngưỡng dưới đây có biên an toàn rộng.
+    expect(rightBlur - leftBlur).toBeLessThan(255 * 0.5)
   })
 
   it('không sửa ảnh input', () => {
