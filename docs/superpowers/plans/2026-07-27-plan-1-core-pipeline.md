@@ -710,6 +710,8 @@ Expected: FAIL — không resolve được import
 
 - [ ] **Step 3: Implement**
 
+> ⚠️ Bản `median3x3` dưới đây lấy median **từng kênh độc lập** (marginal median) và vì vậy **bịa ra màu chưa từng tồn tại trong ảnh gốc** ở biên hai vùng màu — xem Task 30 ("Median không được bịa màu") để biết chi tiết và bản sửa (snap về màu gốc trong cửa sổ, chữ ký hàm không đổi).
+
 `src/core/filters/median.ts`:
 
 ```ts
@@ -2426,12 +2428,19 @@ describe('chamferDistance', () => {
     const d = chamferDistance(mask, w, h)
     expect(d[3 * 7 + 3]).toBeCloseTo(3, 5)
   })
+```
 
+> ⚠️ **Assertion dưới đây SAI — đã phát hiện và sửa lúc thực thi (final fix wave, Task giữ nguyên code triển khai).** Test `'biên ảnh cũng tính là biên vùng'` kỳ vọng `d[1 * 3 + 1]` gần bằng **1**, nhưng giá trị đúng là **2**. Vùng chiếm trọn ảnh 3×3, tâm ở toạ độ (1,1); khoảng cách chamfer tới biên NGOÀI vùng gần nhất (biên ảnh, vốn cũng tính là biên vùng — đúng như comment trong test) là **2** pixel theo cả bốn hướng trực giao, không phải 1. Công thức `(n+1)/2` cho khoảng-cách-tâm-tới-biên của một khối n×n đặc đã được neo sẵn bởi test `'tâm hình vuông 5×5 có khoảng cách 3'` ngay phía trên trong CÙNG file này (n=5 ⇒ (5+1)/2=3, khớp code); áp cùng công thức cho n=3 ⇒ (3+1)/2=**2**. Bản thân assertion — không phải code triển khai `chamferDistance` ở Step 3 — là điểm sai lệch.
+>
+> Nếu thực thi lại task này, sửa `expect(d[1 * 3 + 1]).toBeCloseTo(1, 5)` thành `expect(d[1 * 3 + 1]).toBeCloseTo(2, 5)`.
+
+```ts
   it('biên ảnh cũng tính là biên vùng', () => {
-    // vùng chiếm trọn ảnh 3×3 ⇒ tâm cách biên 1, không phải vô cực
+    // vùng chiếm trọn ảnh 3×3 ⇒ tâm cách biên 2 (công thức (n+1)/2, n=3),
+    // không phải vô cực
     const { mask, w, h } = maskFromRows(['###', '###', '###'])
     const d = chamferDistance(mask, w, h)
-    expect(d[1 * 3 + 1]).toBeCloseTo(1, 5)
+    expect(d[1 * 3 + 1]).toBeCloseTo(2, 5)
   })
 
   it('đường 1px dày có khoảng cách tối đa 1', () => {
@@ -8171,6 +8180,14 @@ Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>"
   - `MIN_SCALE = 0.2` · `MAX_SCALE = 24`
   - `<PaintCanvas puzzle={Puzzle} engine={PaintEngine} selectedColor={number | null} onPaintRegion={(id: number) => void} onFirstPointer={() => void} width={number} height={number} />`
   - `getCanvasRef(): { redrawAll(): void }` qua `ref` — để `/play` gọi khi reset
+
+> ⚠️ **`getCanvasRef` liệt kê ở đây KHÔNG BAO GIỜ được xây — đã phát hiện lúc thực thi final fix wave.** Step 3 của task này không hề tạo `ref`/`useImperativeHandle` nào, và Task 28 (màn `/play` tiêu thụ `PaintCanvas`) cũng không hề gọi `getCanvasRef()` — thay vào đó Task 28 dùng `key={resetCount}` để remount toàn bộ `PaintCanvas` khi reset (xem annotation của Task 28 tại nơi dùng). Đây không đơn thuần là một API chưa dùng tới: bản thân cơ chế `useEffect(redrawAll, [redrawAll])` với `redrawAll` phụ thuộc `[puzzle, engine]` — đúng như spec ở Task này — là **NGUỒN GỐC của C1** (finding Critical trong final fix wave, xem báo cáo `.superpowers/sdd/2026-07-27-plan-1-core-pipeline/final-fix-wave-report.md`):
+>
+> `PaintEngine` mutate bitset TẠI CHỖ (không tạo object mới) khi phục hồi tiến độ đã lưu (`usePaint`'s restore effect gọi `engine.tryPaint(...)` trực tiếp lên instance hiện có). Vì vậy cả `puzzle` lẫn `engine` không bao giờ đổi tham chiếu khi restore xảy ra, và `useEffect(redrawAll, [redrawAll])` — với `redrawAll` khoá theo đúng hai tham chiếu đó — không chạy lại. `paintAllRegions` (hàm DUY NHẤT vẽ lại toàn bộ layer base từ trạng thái engine) chỉ chạy đúng một lần lúc mount, **trước khi** `loadProgress` (bất đồng bộ) kịp resolve. Kết quả: những vùng được phục hồi hiện đúng số liệu ở header/palette nhưng vẫn hiện màu UNFILLED_COLOR trên canvas, và vì engine coi chúng là đã tô, người chơi không bao giờ tô lại được (`tryPaint` trả `already`).
+>
+> **Cách sửa đã áp dụng (final fix wave, không phải `getCanvasRef`/`useImperativeHandle`):** thêm một prop `revision: number` vào `PaintCanvas`, đưa vào dependency của `redrawAll`; `usePaint` sở hữu một counter `revision` (state riêng, KHÔNG dùng chung với `tick`/`filledCount`) và tăng nó đúng MỘT LẦN, bên trong callback `.then()` của effect restore, sau khi vòng lặp `engine.tryPaint(...)` phục hồi xong toàn bộ bitset. `/play` truyền `revision={paint.revision}` xuống `PaintCanvas`. Lý do không chọn `getCanvasRef`: nó vốn đã được liệt kê ở đây từ đầu nhưng chưa từng được ai xây trong suốt các task trước — thêm nó bây giờ nghĩa là xây một API imperative mới (ref + useImperativeHandle) cho một use case (redraw sau restore) hoàn toàn có thể giải quyết bằng data flow khai báo (prop `revision`) nhất quán với phần còn lại của component, và không cần đụng tới cơ chế `key={resetCount}` đã có sẵn cho reset. Quan trọng: `revision` CHỈ tăng sau restore, không tăng ở mỗi lần tô — nếu không, `redrawAll` (O(toàn bộ vùng)) sẽ chạy lại ở mọi cú tô, đúng chi phí mà cơ chế tô theo run (`paintRegion`) tồn tại để tránh.
+>
+> Nếu thực thi lại task này (và Task 25 `usePaint`, Task 28 `/play`), một re-run trung thực với đặc tả gốc sẽ TÁI TẠO LẠI C1 — hãy áp dụng cơ chế `revision` mô tả ở trên thay vì theo đúng interface `useEffect(redrawAll, [redrawAll])` / `getCanvasRef` liệt kê trong tài liệu này.
 
 **Ba layer canvas xếp lên nhau:**
 1. `base` — kích thước bằng ẢNH, style CSS đặt theo viewport (transform bằng CSS `transform: translate() scale()`), nên tô một vùng chỉ là vài `fillRect` toạ độ pixel, không bao giờ phải vẽ lại cả tranh khi zoom.
