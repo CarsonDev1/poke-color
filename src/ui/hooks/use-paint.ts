@@ -59,14 +59,27 @@ export function usePaint(
   const [saveError, setSaveError] = useState<string | null>(null)
   const activeSeconds = useRef(0)
 
+  // Cờ sống của CHÍNH component gọi hook này (khác với biến `alive` cục bộ
+  // trong effect nạp tiến độ bên dưới, vốn chỉ chặn MỘT lượt loadProgress cụ
+  // thể) — dùng để phân biệt "component đã unmount, lượt ghi này chỉ còn là
+  // continuation lạc lối" khỏi "đang cố tình flush lúc dọn dẹp/pagehide" (xem
+  // `save` so với `flush` ngay dưới). `false` một lần khi unmount, không bao
+  // giờ đặt lại true — mỗi lần mount là một ref mới.
+  const aliveRef = useRef(true)
+  useEffect(() => {
+    return () => {
+      aliveRef.current = false
+    }
+  }, [])
+
   const bump = useCallback(() => setTick((t) => t + 1), [])
 
-  // `save` PHẢI tự bắt lỗi: nó được gọi fire-and-forget từ `paint`/`reset`
-  // lẫn được await trực tiếp từ `flush` (kể cả trong effect dọn dẹp lúc
-  // unmount ở `/play`, và từ listener `pagehide` bên dưới). Một rejection
-  // không bắt ở nhánh đầu là unhandled rejection âm thầm (I3) — cả giờ tô
-  // mất sạch không một dấu hiệu nào; ở nhánh sau nó làm hỏng effect unmount.
-  // Bắt tại đây một lần là đủ cho mọi đường gọi.
+  // `writeProgress` PHẢI tự bắt lỗi: nó được gọi fire-and-forget từ
+  // `paint`/`reset` (qua `save`) lẫn được await trực tiếp từ `flush` (kể cả
+  // trong effect dọn dẹp lúc unmount ở `/play`, và từ listener `pagehide` bên
+  // dưới). Một rejection không bắt ở nhánh đầu là unhandled rejection âm thầm
+  // (I3) — cả giờ tô mất sạch không một dấu hiệu nào; ở nhánh sau nó làm hỏng
+  // effect unmount. Bắt tại đây một lần là đủ cho mọi đường gọi.
   //
   // Ghi NGAY, không debounce (I12): spec §8 "Autosave: ghi IndexedDB ngay
   // lập tức; debounce 1.5s đẩy Supabase" — debounce thuộc về đường đẩy
@@ -74,7 +87,11 @@ export function usePaint(
   // ~100 byte (một bitset + vài số), nên ghi mỗi lần tô — kể cả kéo-tô qua
   // hàng chục vùng liên tiếp — không đáng kể so với việc mất nguyên một lượt
   // tô khi debounce chưa kịp chạy lúc đóng tab (không có unmount nào xảy ra).
-  const save = useCallback(async () => {
+  //
+  // Tách riêng khỏi `save`/`flush` (thay vì để `flush` gọi thẳng `save`) vì
+  // hai hàm đó cần ứng xử KHÁC nhau với `aliveRef` — xem giải thích ở từng
+  // hàm — nhưng cả hai đều phải thực hiện đúng MỘT lượt ghi giống hệt nhau.
+  const writeProgress = useCallback(async () => {
     const complete = engine.isComplete()
     try {
       await saveProgress({
@@ -91,10 +108,41 @@ export function usePaint(
     }
   }, [engine, puzzleId])
 
-  /** Dùng khi cần đợi ghi xong xuôi (unmount, pagehide) — bản thân `save` đã ghi ngay, đây chỉ là alias tường minh cho ý "chờ lượt ghi cuối cùng hoàn tất". */
+  /**
+   * Bản fire-and-forget mà `paint`/`reset` gọi ở mỗi lượt tô — có gác
+   * `aliveRef`: nếu lượt gọi này chỉ bắt đầu chạy SAU KHI component đã
+   * unmount (vd một ref cũ còn được giữ và gọi lại — xem test dùng
+   * `result.current` sau `unmount()`), nó không chạm gì tới `writeProgress`
+   * (và qua đó, không mở/đụng tới kết nối IndexedDB) nữa.
+   *
+   * Gác này KHÔNG (và không thể) huỷ được một lượt `save()` đã bắt đầu chạy
+   * TRƯỚC khi unmount xảy ra — bản thân yêu cầu ghi đã được gửi đi đồng bộ
+   * ngay khi `save()` bắt đầu (trước bất kỳ `await` nào), nên tới lúc unmount
+   * xảy ra thì yêu cầu đó đã nằm ngoài tầm với của bất kỳ cờ nào kiểm tra bên
+   * trong hàm này. Trường hợp đó vốn dĩ vô hại: `flush()` (effect dọn dẹp của
+   * `/play`, và listener `pagehide`) ghi lại đúng trạng thái CUỐI CÙNG của
+   * `engine` một lần nữa ngay lúc rời màn — bất kể lượt `save()` tự phát ở
+   * trên có kịp xong trước đó hay không, dữ liệu đúng vẫn luôn được đảm bảo
+   * bởi chính `flush()`, không phụ thuộc lượt ghi tự phát này.
+   */
+  const save = useCallback(async () => {
+    if (!aliveRef.current) return
+    await writeProgress()
+  }, [writeProgress])
+
+  /**
+   * Dùng khi cần đợi ghi xong xuôi (unmount, pagehide) — KHÔNG gác theo
+   * `aliveRef`: đây là lượt ghi CỐ Ý, muốn chạy dù component đã (hoặc đang)
+   * unmount — cả effect dọn dẹp của `/play` lẫn listener `pagehide` đều gọi
+   * thẳng `flush()` chứ không phải `save()` chính vì lý do này. Nếu `flush`
+   * cũng gác theo `aliveRef` (vd bằng cách gọi lại `save()`), effect dọn dẹp
+   * lúc unmount — vốn luôn chạy SAU khi `aliveRef.current` đã thành `false`
+   * — sẽ luôn bị chặn, xoá sạch tác dụng của I12 (đảm bảo tiến độ được ghi
+   * lúc rời màn/đóng tab).
+   */
   const flush = useCallback(async () => {
-    await save()
-  }, [save])
+    await writeProgress()
+  }, [writeProgress])
 
   // Đóng tab KHÔNG unmount component (không effect cleanup nào chạy) —
   // `pagehide` là tín hiệu duy nhất còn lại để flush tiến độ + activeSeconds
