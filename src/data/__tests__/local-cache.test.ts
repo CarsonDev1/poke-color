@@ -74,6 +74,28 @@ describe('newPuzzleId', () => {
   it('sinh id khác nhau mỗi lần', () => {
     expect(newPuzzleId()).not.toBe(newPuzzleId())
   })
+
+  // `crypto.randomUUID` chỉ tồn tại trong secure context (HTTPS hoặc
+  // localhost). Quy trình chính là `npm run dev -- --host` rồi mở
+  // `http://192.168.x.x:5173` trên tablet — KHÔNG phải secure context — nên
+  // `newPuzzleId` phải tự dựng UUID v4 từ `crypto.getRandomValues` (luôn có,
+  // kể cả context không an toàn) khi `randomUUID` vắng mặt.
+  it('crypto.randomUUID vắng mặt (context không an toàn) → vẫn sinh UUID v4 hợp lệ', () => {
+    const original = crypto.randomUUID
+    // `randomUUID` kế thừa từ prototype của `Crypto`, nên `delete
+    // crypto.randomUUID` là no-op (không phải own property) — phải GHI ĐÈ
+    // bằng gán giá trị `undefined` để thực sự che khuất nó, mô phỏng đúng
+    // môi trường không secure (HTTP qua LAN) nơi `randomUUID` không tồn tại.
+    // @ts-expect-error mô phỏng môi trường không secure: randomUUID không tồn tại
+    crypto.randomUUID = undefined
+    try {
+      const id = newPuzzleId()
+      expect(id).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i)
+      expect(newPuzzleId()).not.toBe(id)
+    } finally {
+      crypto.randomUUID = original
+    }
+  })
 })
 
 describe('savePuzzle / listPuzzles / loadPuzzle', () => {
