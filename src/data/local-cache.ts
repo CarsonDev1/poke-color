@@ -77,18 +77,63 @@ function db(): Promise<IDBPDatabase<Schema>> {
   return dbPromise
 }
 
-/** chỉ dùng trong test — đóng và xoá database để mỗi test bắt đầu sạch */
+/**
+ * Chỉ dùng trong test — đóng và xoá database để mỗi test bắt đầu sạch.
+ *
+ * `deleteDatabase` bắn `blocked` khi còn MỘT kết nối khác đang mở tới cùng
+ * database (chưa `close()`, hoặc `close()` rồi nhưng transaction của nó chưa
+ * chạy xong). Bản cũ coi `blocked` như thành công (`resolve()` ngay) — nghĩa
+ * là database KHÔNG hề bị xoá, nhưng hàm này vẫn báo "xong", nên test kế tiếp
+ * âm thầm chạy trên dữ liệu CŨ của test trước và (nếu) fail thì fail ở một
+ * assertion xa, không liên quan gì tới nguyên nhân thật.
+ *
+ * Ở đây có hai khả năng gây `blocked`, cần xử lý khác nhau:
+ *   1. Kết nối cũ đang trong quá trình đóng thật sự (vd một `save()` vừa ghi
+ *      xong đúng lúc, transaction chưa kịp báo hoàn tất) — đây là tạm thời,
+ *      chỉ cần đợi một nhịp ngắn rồi thử xoá lại là hết.
+ *   2. Kết nối bị RÒ RỈ (vd continuation của `save()` chạy sau khi component
+ *      đã unmount, tự mở lại kết nối mới mà không ai đóng nó) — đây không tự
+ *      hết dù đợi bao lâu, phải ném lỗi rõ ràng để suite fail đúng tại đây,
+ *      thay vì chạy tiếp cho lỗi trồi lên ở một file test khác.
+ *
+ * Thử lại có giới hạn (5 lần, cách nhau 25ms — tổng cộng tối đa ~100ms, không
+ * đáng kể so với testTimeout 5000ms) phân biệt được hai trường hợp: (1) tự
+ * hết trong vài lần thử đầu; (2) vẫn `blocked` sau khi hết lượt thử ⇒ ném lỗi
+ * nêu rõ nghi phạm, không lặng lẽ trả về như trước.
+ */
 export async function resetDatabaseForTests(): Promise<void> {
   if (dbPromise) {
     ;(await dbPromise).close()
     dbPromise = null
   }
-  await new Promise<void>((resolve) => {
-    const req = indexedDB.deleteDatabase(DB_NAME)
-    req.onsuccess = () => resolve()
-    req.onerror = () => resolve()
-    req.onblocked = () => resolve()
-  })
+
+  const MAX_ATTEMPTS = 5
+  const RETRY_DELAY_MS = 25
+
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+    const blocked = await new Promise<boolean>((resolve, reject) => {
+      const req = indexedDB.deleteDatabase(DB_NAME)
+      req.onsuccess = () => resolve(false)
+      req.onerror = () =>
+        reject(
+          req.error ??
+            new Error(`resetDatabaseForTests(): deleteDatabase("${DB_NAME}") thất bại không rõ lý do`),
+        )
+      req.onblocked = () => resolve(true)
+    })
+    if (!blocked) return
+
+    if (attempt === MAX_ATTEMPTS) {
+      throw new Error(
+        `resetDatabaseForTests(): xoá database "${DB_NAME}" vẫn bị "blocked" sau ${MAX_ATTEMPTS} lần thử ` +
+          `(cách nhau ${RETRY_DELAY_MS}ms) — vẫn còn một kết nối khác đang mở tới database này. Nhiều khả năng ` +
+          `là kết nối rò rỉ từ test trước (vd một continuation của usePaint.save() chạy sau khi component đã ` +
+          `unmount và tự mở lại kết nối mới) chứ không phải một kết nối đang đóng bình thường — nếu chỉ là đang ` +
+          `đóng, ${MAX_ATTEMPTS} lần thử đã đủ thời gian.`,
+      )
+    }
+    await new Promise((resolve) => setTimeout(resolve, RETRY_DELAY_MS))
+  }
 }
 
 /**
