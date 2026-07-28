@@ -34,6 +34,9 @@ export default defineConfig({
         test: {
           name: 'jsdom',
           environment: 'jsdom',
+          // Cần thiết để `@testing-library/react` dọn DOM sau mỗi test — xem
+          // giải thích trong file. KHÔNG phải jest-dom (không thêm matcher).
+          setupFiles: ['./src/ui/__tests__/setup.ts'],
           include: jsdomDirs.flatMap((dir) => [
             `src/${dir}/**/*.test.ts`,
             `src/${dir}/**/*.test.tsx`,
