@@ -132,4 +132,23 @@ describe('assemblePuzzle', () => {
     bad[1] = { ...bad[1], id: 5 }
     expect(() => assemblePuzzle(sampleBin(), bad)).toThrow(/liên tục/i)
   })
+
+  it('báo lỗi khi colorIndex vượt quá số màu trong palette, nêu rõ vùng và cả hai số', () => {
+    // sampleBin() có palette 2 màu (index hợp lệ 0..1); regionsJson viết
+    // trước ghi colorIndex 5 cho vùng 1 (vd sinh từ pipeline chạy với palette
+    // khác) sẽ khiến rgbCss(palette[5]) === rgbCss(undefined) → TypeError bên
+    // trong một hiệu ứng vẽ ở /play → React unmount cả cây → trắng trơn,
+    // không thông báo gì (không có error boundary nào trong app).
+    const bad = sampleRegions()
+    bad[1] = { ...bad[1], colorIndex: 5 }
+    expect(() => assemblePuzzle(sampleBin(), bad)).toThrow(/vùng 1/i)
+    expect(() => assemblePuzzle(sampleBin(), bad)).toThrow(/5/)
+    expect(() => assemblePuzzle(sampleBin(), bad)).toThrow(/2/)
+  })
+
+  it('colorIndex âm cũng bị từ chối', () => {
+    const bad = sampleRegions()
+    bad[0] = { ...bad[0], colorIndex: -1 }
+    expect(() => assemblePuzzle(sampleBin(), bad)).toThrow(/vùng 0/i)
+  })
 })

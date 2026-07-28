@@ -153,6 +153,17 @@ export function assemblePuzzle(bin: PuzzleBin, regions: RegionMeta[]): Puzzle {
     if (r.id !== i) {
       throw new Error(`Id vùng phải liên tục từ 0: vùng thứ ${i} có id ${r.id}`)
     }
+    // Không kiểm tra ở đây thì `regionsJson.gz` ghi lệch với palette (vd sinh
+    // ra từ một palette khác số màu) sẽ lọt qua tới tận lúc render: rgbCss
+    // trong layers.ts đọc palette[colorIndex] === undefined, và
+    // `rgb(${undefined},${undefined},${undefined})` ném TypeError bên trong
+    // một hiệu ứng vẽ — React unmount cả cây, ra trang trắng không một dòng
+    // thông báo (app không có error boundary nào).
+    if (r.colorIndex < 0 || r.colorIndex >= bin.palette.length) {
+      throw new Error(
+        `Vùng ${r.id} có colorIndex ${r.colorIndex} ngoài phạm vi palette (0..${bin.palette.length - 1}, palette có ${bin.palette.length} màu)`,
+      )
+    }
   })
 
   const field = {
