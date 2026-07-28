@@ -15,7 +15,7 @@ import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { encodePuzzleBin, encodeRegions } from '@/core/codec/puzzle-format'
 import { gzip } from '@/data/compress'
-import { resetDatabaseForTests, savePuzzle, loadProgress } from '@/data/local-cache'
+import { resetDatabaseForTests, savePuzzle, saveProgress, loadProgress } from '@/data/local-cache'
 import { DEFAULT_PARAMS, type RegionMeta, type Rgb } from '@/core/types'
 import PlayRoute from '@/routes/play'
 
@@ -41,6 +41,12 @@ const regions: RegionMeta[] = [0, 1, 0, 1].map((colorIndex, id) => ({
 // ctx được share cho MỌI canvas (base/overlay/label, kể cả canvas được tạo lại
 // sau khi PaintCanvas remount) — nhờ vậy đếm số lần gọi drawImage/fillRect
 // trước và sau một hành động cho biết layer có được vẽ lại hay không.
+//
+// `fillRectCalls` ghi lại `fillStyle` TẠI THỜI ĐIỂM gọi fillRect (không phải
+// giá trị fillStyle cuối cùng của ctx, vốn bị các lần vẽ sau ghi đè) — cần để
+// test C1 phân biệt được layer base tô vùng bằng màu palette (đã phục hồi)
+// hay UNFILLED_COLOR (chưa phục hồi kịp).
+const fillRectCalls: { fillStyle: string; x: number; y: number }[] = []
 const ctx = {
   fillStyle: '',
   strokeStyle: '',
@@ -49,7 +55,9 @@ const ctx = {
   textAlign: '',
   textBaseline: '',
   globalAlpha: 1,
-  fillRect: vi.fn(),
+  fillRect: vi.fn((x: number, y: number) => {
+    fillRectCalls.push({ fillStyle: String(ctx.fillStyle), x, y })
+  }),
   clearRect: vi.fn(),
   drawImage: vi.fn(),
   fillText: vi.fn(),
@@ -316,5 +324,37 @@ describe('PlayRoute', () => {
 
     unmount()
     await waitFor(async () => expect((await loadProgress('p1'))?.filledCount).toBe(1))
+  })
+
+  it('C1: phục hồi tiến độ đã lưu → layer base vẽ đúng màu palette, không phải màu chưa tô', async () => {
+    // vùng 0 (colorIndex 0, đỏ) đã tô từ trước — mô phỏng "vào lại /play sau
+    // khi đã tô một phần rồi rời màn".
+    await saveProgress({
+      puzzleId: 'p1',
+      filled: new Uint8Array([0b0000_0001]),
+      filledCount: 1,
+      activeSeconds: 0,
+      completedAt: null,
+      updatedAt: 1,
+    })
+
+    fillRectCalls.length = 0
+    renderPlay()
+    // header phải phản ánh tiến độ đã phục hồi
+    await waitFor(() => expect(screen.getByText(/1\s*\/\s*4/)).toBeTruthy())
+
+    // Vùng 0 nằm tại toạ độ ẢNH (0,0) (regionMap = [0,1,2,3], rộng 4×1).
+    // Nếu C1 chưa sửa: `redrawAll` (dùng để vẽ TOÀN BỘ layer base từ trạng
+    // thái engine) chạy đúng một lần lúc mount, TRƯỚC KHI loadProgress
+    // resolve — nên nó thấy engine rỗng và tô cả 4 vùng UNFILLED_COLOR;
+    // không có lần gọi fillRect nào sau đó vẽ lại toàn bộ để sửa việc này,
+    // dù state phục hồi lên state header đúng. Test này khẳng định layer
+    // base cũng phải đúng, không chỉ con số hiển thị.
+    await waitFor(() => {
+      const paintedRestoredRegionWithPaletteColor = fillRectCalls.some(
+        (c) => c.x === 0 && c.y === 0 && c.fillStyle === 'rgb(255,0,0)',
+      )
+      expect(paintedRestoredRegionWithPaletteColor).toBe(true)
+    })
   })
 })

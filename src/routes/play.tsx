@@ -223,6 +223,7 @@ function PlayScreen({ puzzleId, puzzle, title }: { puzzleId: string; puzzle: Puz
           onFirstPointer={() => sound.unlock()}
           width={size.w}
           height={size.h}
+          revision={paint.revision}
         />
       </div>
 

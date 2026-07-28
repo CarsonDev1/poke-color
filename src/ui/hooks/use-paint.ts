@@ -14,6 +14,19 @@ export interface PaintState {
   remaining: Uint32Array
   isComplete: boolean
   announcement: string
+  /**
+   * Tăng đúng MỘT LẦN, sau khi tiến độ đã lưu (nếu có) được nạp xong.
+   *
+   * `PaintEngine` mutate tại chỗ (không tạo object mới) nên `puzzle`/`engine`
+   * không bao giờ đổi identity khi phục hồi tiến độ — `redrawAll` trong
+   * `PaintCanvas` (phụ thuộc `[puzzle, engine]`) sẽ không chạy lại và layer
+   * base tiếp tục hiện UNFILLED_COLOR cho những vùng vừa được phục hồi (C1).
+   * `PaintCanvas` phải đưa `revision` vào dependency của `redrawAll` để nó vẽ
+   * lại đúng MỘT lần nữa sau khi restore xong — KHÔNG được tăng ở mỗi lần tô
+   * (xem `paint`), vì `redrawAll` là O(toàn bộ vùng), đúng chi phí mà tô theo
+   * run tồn tại để tránh.
+   */
+  revision: number
 }
 
 export function usePaint(
@@ -31,6 +44,7 @@ export function usePaint(
 
   const [selectedColor, setSelectedColor] = useState<number | null>(null)
   const [tick, setTick] = useState(0)
+  const [revision, setRevision] = useState(0)
   const [announcement, setAnnouncement] = useState('')
   const activeSeconds = useRef(0)
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -76,6 +90,10 @@ export function usePaint(
       }
       activeSeconds.current = rec.activeSeconds
       bump()
+      // Đúng MỘT lần, sau khi restore xong — báo cho PaintCanvas vẽ lại toàn
+      // bộ layer base. Xem giải thích đầy đủ tại khai báo `revision` trong
+      // PaintState.
+      setRevision((r) => r + 1)
     })
     return () => {
       alive = false
@@ -161,6 +179,7 @@ export function usePaint(
     remaining,
     isComplete: engine.isComplete(),
     announcement,
+    revision,
     selectColor,
     paint,
     reset,

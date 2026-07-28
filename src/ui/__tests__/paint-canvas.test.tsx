@@ -88,6 +88,7 @@ function setup(over: Partial<Pick<Parameters<typeof PaintCanvas>[0], 'selectedCo
     onFirstPointer: vi.fn<() => void>(),
     width: 400,
     height: 100,
+    revision: 0,
     ...over,
   }
   render(<PaintCanvas {...props} />)

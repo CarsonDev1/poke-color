@@ -17,6 +17,7 @@ export function PaintCanvas({
   onFirstPointer,
   width,
   height,
+  revision,
 }: {
   puzzle: Puzzle
   engine: PaintEngine
@@ -25,6 +26,15 @@ export function PaintCanvas({
   onFirstPointer: () => void
   width: number
   height: number
+  /**
+   * Tăng đúng một lần sau khi `usePaint` phục hồi tiến độ đã lưu xong (xem
+   * `PaintState.revision`). `puzzle`/`engine` không đổi identity khi restore
+   * (PaintEngine mutate tại chỗ), nên phải có tín hiệu RIÊNG này trong
+   * dependency của `redrawAll` để layer base vẽ lại đúng trạng thái đã phục
+   * hồi (sửa C1) — không dùng `engine.filledCount`/`tick` vì những giá trị đó
+   * đổi ở MỌI lần tô, sẽ kéo `redrawAll` (O(toàn bộ vùng)) chạy lại mỗi cú tô.
+   */
+  revision: number
 }) {
   const baseRef = useRef<HTMLCanvasElement>(null)
   const overlayRef = useRef<HTMLCanvasElement>(null)
@@ -49,7 +59,10 @@ export function PaintCanvas({
       ctx.drawImage(bmp, 0, 0)
       bmp.close()
     })
-  }, [puzzle, engine])
+    // `revision` không được đọc trong thân hàm nhưng PHẢI có trong dependency
+    // list: xem giải thích tại khai báo prop `revision` phía trên (C1).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [puzzle, engine, revision])
 
   useEffect(redrawAll, [redrawAll])
 
