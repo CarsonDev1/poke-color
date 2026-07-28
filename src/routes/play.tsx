@@ -63,6 +63,11 @@ function PlayScreen({ puzzleId, puzzle, title }: { puzzleId: string; puzzle: Puz
   const [originalUrl, setOriginalUrl] = useState<string | null>(null)
   const [askReset, setAskReset] = useState(false)
   const [showDone, setShowDone] = useState(false)
+  // Nội dung của vùng aria-live dùng chung — cập nhật bởi CẢ hai nguồn: đổi
+  // sau mỗi lượt tô (`paint.announcement`, đã có sẵn) LẪN đổi mỗi khi con trỏ
+  // vùng của bàn phím di chuyển (I7). Tin nhắn mới nhất luôn thắng, đúng như
+  // cách một aria-live "polite" nên hoạt động.
+  const [liveMessage, setLiveMessage] = useState('')
   const [size, setSize] = useState({ w: 800, h: 520 })
   // Tăng mỗi lần xác nhận "Tô lại từ đầu" — xem giải thích tại nơi dùng.
   const [resetCount, setResetCount] = useState(0)
@@ -126,6 +131,26 @@ function PlayScreen({ puzzleId, puzzle, title }: { puzzleId: string; puzzle: Puz
   useEffect(() => {
     if (paint.isComplete) setShowDone(true)
   }, [paint.isComplete])
+
+  // Đẩy thông báo tiến độ (đã có sẵn) vào vùng aria-live dùng chung — bỏ qua
+  // chuỗi rỗng ban đầu để không xoá mất thông báo focus-region nếu nó tới
+  // trước lượt tô đầu tiên.
+  useEffect(() => {
+    if (paint.announcement) setLiveMessage(paint.announcement)
+  }, [paint.announcement])
+
+  // Con trỏ vùng của bàn phím (I7): id vùng theo thứ tự raster-scan, không
+  // theo vị trí thị giác, nên đây là cách DUY NHẤT người dùng screen-reader
+  // biết con trỏ đang ở đâu sau khi bấm mũi tên (canvas tự vẽ viền cho mắt
+  // nhìn thấy — xem PaintCanvas/drawFocusRing — nhưng đó không giúp gì AT).
+  const onFocusRegionChange = useCallback(
+    (regionId: number) => {
+      const region = puzzle.regions[regionId]
+      if (!region) return
+      setLiveMessage(`Vùng ${regionId}, màu ${region.colorIndex + 1}`)
+    },
+    [puzzle],
+  )
 
   // đo khung để canvas vừa cửa sổ
   useEffect(() => {
@@ -194,7 +219,7 @@ function PlayScreen({ puzzleId, puzzle, title }: { puzzleId: string; puzzle: Puz
       </header>
 
       <p aria-live="polite" style={{ position: 'absolute', width: 1, height: 1, overflow: 'hidden', clip: 'rect(0 0 0 0)' }}>
-        {paint.announcement}
+        {liveMessage}
       </p>
 
       {paint.saveError && (
@@ -238,6 +263,7 @@ function PlayScreen({ puzzleId, puzzle, title }: { puzzleId: string; puzzle: Puz
           selectedColor={paint.selectedColor}
           onPaintRegion={paint.paint}
           onFirstPointer={() => sound.unlock()}
+          onFocusRegionChange={onFocusRegionChange}
           width={size.w}
           height={size.h}
           revision={paint.revision}

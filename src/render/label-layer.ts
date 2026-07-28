@@ -47,3 +47,41 @@ export function drawLabels(
     ctx.fillText(text, s.x, s.y)
   }
 }
+
+const FOCUS_RING_COLOR = '#2563eb'
+const FOCUS_RING_WIDTH = 3
+
+/**
+ * Viền "con trỏ" vùng hiện tại của bàn phím (spec §8: "focus ring vẽ trên
+ * layer riêng"). Trước khi có hàm này, `focusRegion` chỉ tồn tại trong state
+ * — Tab vào canvas rồi bấm mũi tên không có gì đổi trên màn hình lẫn vùng
+ * live region, và vì id vùng theo thứ tự raster-scan (không theo vị trí thị
+ * giác), người dùng không có cách nào đoán được con trỏ đang ở đâu.
+ *
+ * Gọi SAU `drawLabels` trên CÙNG canvas `labels` (không tự `clearRect`) — vẽ
+ * theo run giống `drawHighlight`, trong hệ toạ độ MÀN HÌNH như `drawLabels`.
+ */
+export function drawFocusRing(
+  ctx: CanvasRenderingContext2D,
+  puzzle: Puzzle,
+  regionId: number,
+  v: Viewport,
+  viewW: number,
+  viewH: number,
+): void {
+  if (!Number.isInteger(regionId) || regionId < 0 || regionId >= puzzle.regions.length) return
+
+  const { runs } = puzzle
+  ctx.save()
+  ctx.strokeStyle = FOCUS_RING_COLOR
+  ctx.lineWidth = FOCUS_RING_WIDTH
+
+  for (let i = runs.offsets[regionId]; i < runs.offsets[regionId + 1]; i++) {
+    const topLeft = imageToScreen(v, runs.x0[i], runs.y[i])
+    const bottomRight = imageToScreen(v, runs.x1[i] + 1, runs.y[i] + 1)
+    if (bottomRight.x < 0 || bottomRight.y < 0 || topLeft.x > viewW || topLeft.y > viewH) continue
+    ctx.strokeRect(topLeft.x, topLeft.y, bottomRight.x - topLeft.x, bottomRight.y - topLeft.y)
+  }
+
+  ctx.restore()
+}

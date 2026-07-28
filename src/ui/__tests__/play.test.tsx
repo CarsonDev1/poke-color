@@ -66,6 +66,7 @@ const ctx = {
   fillRect: vi.fn((x: number, y: number) => {
     fillRectCalls.push({ fillStyle: String(ctx.fillStyle), x, y })
   }),
+  strokeRect: vi.fn(),
   clearRect: vi.fn(),
   drawImage: vi.fn(),
   fillText: vi.fn(),
@@ -193,6 +194,21 @@ describe('PlayRoute', () => {
     await waitFor(() => expect(screen.getByText('Tranh thử')).toBeTruthy())
     const live = document.querySelector('[aria-live="polite"]')
     expect(live).toBeTruthy()
+  })
+
+  it('I7: mũi tên di chuyển con trỏ vùng bàn phím → aria-live thông báo "Vùng <id>, màu <label>"', async () => {
+    renderPlay()
+    await waitFor(() => expect(screen.getByText('Tranh thử')).toBeTruthy())
+
+    const surface = screen.getByRole('application', { name: /tranh tô màu/i })
+    surface.focus()
+    // Trước khi sửa: Tab vào canvas rồi bấm ArrowRight mười lần — cả màn
+    // hình lẫn vùng live region hoàn toàn không đổi gì, vì focusRegion chỉ
+    // tồn tại trong state của PaintCanvas, không có đường nào thoát ra ngoài.
+    await userEvent.keyboard('{ArrowRight}')
+
+    const live = document.querySelector('[aria-live="polite"]')
+    await waitFor(() => expect(live?.textContent).toMatch(/vùng 1/i))
   })
 
   it('phím số 1 chọn màu 1', async () => {

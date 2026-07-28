@@ -10,6 +10,10 @@ import type { Puzzle, RegionMeta, Rgb } from '@/core/types'
 // cùng của ctx, vốn bị các lần vẽ sau ghi đè) — cần để test I14 phân biệt
 // được canvas có tô lạc quan (optimistic paint) bằng màu palette hay không.
 const fillRectCalls: { fillStyle: string }[] = []
+// Số lần strokeRect được gọi (không quan tâm tham số) — dùng để xác nhận
+// hiệu ứng vẽ lại labels/focus-ring THỰC SỰ chạy lại khi focusRegion đổi
+// (I7), phân biệt với việc chỉ có state đổi mà không có gì được vẽ.
+let strokeRectCallCount = 0
 
 beforeAll(() => {
   // jsdom không có canvas 2D thật; stub đủ để component chạy
@@ -23,6 +27,9 @@ beforeAll(() => {
     globalAlpha: 1,
     fillRect: vi.fn(() => {
       fillRectCalls.push({ fillStyle: String(ctx.fillStyle) })
+    }),
+    strokeRect: vi.fn(() => {
+      strokeRectCallCount++
     }),
     clearRect: vi.fn(),
     drawImage: vi.fn(),
@@ -355,5 +362,47 @@ describe('PaintCanvas', () => {
     expect(props.onPaintRegion).not.toHaveBeenCalled()
 
     fireEvent.pointerUp(surface, { pointerId: 1 })
+  })
+
+  it('I7: phím mũi tên đổi focusRegion → viền vùng mới thực sự được vẽ lại (strokeRect chạy lại, không chỉ state đổi)', async () => {
+    setup()
+    const surface = screen.getByRole('application', { name: /tranh tô màu/i })
+    surface.focus()
+    strokeRectCallCount = 0
+
+    // Trước khi sửa: hiệu ứng vẽ overlay/labels chỉ phụ thuộc [puzzle, engine,
+    // selectedColor, view, width, height, engine.filledCount] — không có
+    // focusRegion, nên ArrowRight (chỉ đổi focusRegion) không kích hoạt vẽ lại
+    // gì cả; con trỏ bàn phím tồn tại trong state nhưng vô hình trên màn hình.
+    await userEvent.keyboard('{ArrowRight}')
+
+    expect(strokeRectCallCount).toBeGreaterThan(0)
+  })
+
+  it('I7: mũi tên di chuyển focus → gọi onFocusRegionChange với id vùng mới (để /play announce qua aria-live)', async () => {
+    const p = puzzle()
+    const onFocusRegionChange = vi.fn()
+    render(
+      <PaintCanvas
+        puzzle={p}
+        engine={new PaintEngine(p.regions)}
+        selectedColor={0}
+        onPaintRegion={vi.fn()}
+        onFirstPointer={vi.fn()}
+        width={400}
+        height={100}
+        revision={0}
+        onFocusRegionChange={onFocusRegionChange}
+      />,
+    )
+    const surface = screen.getByRole('application', { name: /tranh tô màu/i })
+    surface.focus()
+    // Lần gọi lúc mount (focusRegion mặc định = 0) không phải điều test này
+    // quan tâm — chỉ quan tâm lần gọi do người dùng di chuyển con trỏ.
+    onFocusRegionChange.mockClear()
+
+    await userEvent.keyboard('{ArrowRight}')
+
+    expect(onFocusRegionChange).toHaveBeenCalledWith(1)
   })
 })

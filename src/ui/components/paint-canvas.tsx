@@ -3,7 +3,7 @@ import type { PaintEngine, PaintResult } from '@/core/engine/paint-engine'
 import type { Puzzle } from '@/core/types'
 import { buildOutlineImageData, paintAllRegions, paintRegion, rgbCss, UNFILLED_COLOR } from '@/render/layers'
 import { drawHighlight } from '@/render/highlight'
-import { drawLabels } from '@/render/label-layer'
+import { drawFocusRing, drawLabels } from '@/render/label-layer'
 import { clampPan, fitViewport, hitTestRegion, panBy, zoomAbout, type Viewport } from '@/render/viewport'
 
 export const MIN_SCALE = 0.2
@@ -15,6 +15,7 @@ export function PaintCanvas({
   selectedColor,
   onPaintRegion,
   onFirstPointer,
+  onFocusRegionChange,
   width,
   height,
   revision,
@@ -31,6 +32,13 @@ export function PaintCanvas({
    */
   onPaintRegion: (regionId: number) => PaintResult | undefined
   onFirstPointer: () => void
+  /**
+   * Báo lên cha mỗi khi "con trỏ" vùng của bàn phím (`focusRegion`) đổi, để
+   * `/play` announce qua `aria-live` (I7) — id vùng theo thứ tự raster-scan,
+   * không theo vị trí thị giác, nên không có cách nào khác để người dùng biết
+   * con trỏ đang ở đâu ngoài việc nghe hoặc nhìn viền vẽ trên canvas labels.
+   */
+  onFocusRegionChange?: (regionId: number) => void
   width: number
   height: number
   /**
@@ -77,13 +85,28 @@ export function PaintCanvas({
     setView(fitViewport(puzzle.width, puzzle.height, width, height))
   }, [puzzle.width, puzzle.height, width, height])
 
-  // highlight + số vẽ lại khi màu chọn, viewport, hay tiến độ đổi
+  // highlight + số + viền con trỏ bàn phím vẽ lại khi màu chọn, viewport,
+  // tiến độ, hay vùng đang focus đổi. `focusRegion` PHẢI có trong dependency
+  // list (I7): thiếu nó, ArrowRight/Left/Up/Down (chỉ đổi focusRegion, không
+  // đổi gì khác trong danh sách này) sẽ không kích hoạt vẽ lại — con trỏ tồn
+  // tại trong state nhưng vô hình trên màn hình.
   useEffect(() => {
     const octx = overlayRef.current?.getContext('2d')
     const lctx = labelRef.current?.getContext('2d')
     if (octx) drawHighlight(octx, puzzle, engine, selectedColor, view, puzzle.width, puzzle.height)
-    if (lctx) drawLabels(lctx, puzzle, engine, view, width, height)
-  }, [puzzle, engine, selectedColor, view, width, height, engine.filledCount])
+    if (lctx) {
+      drawLabels(lctx, puzzle, engine, view, width, height)
+      drawFocusRing(lctx, puzzle, focusRegion, view, width, height)
+    }
+  }, [puzzle, engine, selectedColor, view, width, height, engine.filledCount, focusRegion])
+
+  // Báo lên cha để announce qua aria-live (I7) — tách khỏi effect vẽ ở trên
+  // vì đây là side effect khác hẳn (gọi callback ra ngoài component, không vẽ
+  // gì), dù cùng phụ thuộc `focusRegion`.
+  useEffect(() => {
+    onFocusRegionChange?.(focusRegion)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [focusRegion])
 
   const localPoint = (e: PointerEvent | WheelEvent): { x: number; y: number } => {
     const rect = surfaceRef.current!.getBoundingClientRect()

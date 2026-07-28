@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { assemblePuzzle } from '@/core/codec/puzzle-format'
 import { PaintEngine } from '@/core/engine/paint-engine'
-import { drawLabels } from '@/render/label-layer'
+import { drawFocusRing, drawLabels } from '@/render/label-layer'
 import { drawHighlight } from '@/render/highlight'
 import type { Puzzle, RegionMeta, Rgb } from '@/core/types'
 
@@ -33,12 +33,14 @@ function fakeCtx() {
     fillText: vi.fn(),
     strokeText: vi.fn(),
     fillRect: vi.fn(),
+    strokeRect: vi.fn(),
     clearRect: vi.fn(),
     save: vi.fn(),
     restore: vi.fn(),
   } as unknown as CanvasRenderingContext2D & {
     fillText: ReturnType<typeof vi.fn>
     fillRect: ReturnType<typeof vi.fn>
+    strokeRect: ReturnType<typeof vi.fn>
     clearRect: ReturnType<typeof vi.fn>
   }
 }
@@ -116,6 +118,40 @@ describe('drawLabels', () => {
     const p = puzzle()
     drawLabels(ctx, p, new PaintEngine(p.regions), V, 100, 100)
     expect(ctx.clearRect).toHaveBeenCalledWith(0, 0, 100, 100)
+  })
+})
+
+describe('drawFocusRing (I7 — con trỏ vùng bàn phím phải hiện ra được vẽ, không chỉ tồn tại trong state)', () => {
+  it('viền vùng đang focus bằng strokeRect, một lần mỗi run', () => {
+    const ctx = fakeCtx()
+    const p = puzzle()
+    // vùng 0: 2 run (một mỗi hàng của khối 2×2)
+    drawFocusRing(ctx, p, 0, V, 100, 100)
+    expect(ctx.strokeRect).toHaveBeenCalledTimes(2)
+  })
+
+  it('chỉ viền đúng vùng đang focus, không viền vùng khác', () => {
+    const ctx = fakeCtx()
+    const p = puzzle()
+    drawFocusRing(ctx, p, 2, V, 100, 100)
+    // vùng 2 cũng có 2 run — nếu code lỡ viền nhầm vùng 0 hoặc 1 (4 run gộp
+    // lại: 2+2) thì assertion đếm lần gọi này sẽ lệch, bắt được lỗi off-by-id
+    expect(ctx.strokeRect).toHaveBeenCalledTimes(2)
+  })
+
+  it('id vùng ngoài phạm vi (vd -1 khi puzzle rỗng) → không vẽ gì, không throw', () => {
+    const ctx = fakeCtx()
+    const p = puzzle()
+    expect(() => drawFocusRing(ctx, p, 99, V, 100, 100)).not.toThrow()
+    expect(ctx.strokeRect).not.toHaveBeenCalled()
+  })
+
+  it('vẽ ở toạ độ màn hình (theo viewport), không phải toạ độ ảnh thô', () => {
+    const ctx = fakeCtx()
+    const p = puzzle()
+    drawFocusRing(ctx, p, 0, { scale: 10, tx: 5, ty: 7 }, 200, 200)
+    // vùng 0 hàng y=0 chạy ảnh x=[0,1] ⇒ màn hình x=[5, 25], y=[7,17]
+    expect(ctx.strokeRect).toHaveBeenCalledWith(5, 7, 20, 10)
   })
 })
 
