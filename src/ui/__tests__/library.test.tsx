@@ -16,6 +16,7 @@ import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { encodePuzzleBin, encodeRegions } from '@/core/codec/puzzle-format'
 import { gzip } from '@/data/compress'
 import {
+  deletePuzzle,
   listPuzzles,
   resetDatabaseForTests,
   saveProgress,
@@ -24,6 +25,18 @@ import {
 } from '@/data/local-cache'
 import { DEFAULT_PARAMS, type RegionMeta, type Rgb } from '@/core/types'
 import LibraryRoute from '@/routes/library'
+
+// Mặc định uỷ nhiệm cho implementation thật (fake-indexeddb) — chỉ các test
+// I3 dưới đây ghi đè MỘT LẦN bằng `mockRejectedValueOnce` để mô phỏng
+// IndexedDB từ chối (bị chặn ở chế độ duyệt riêng tư, hoặc xoá thất bại).
+vi.mock('@/data/local-cache', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/data/local-cache')>()
+  return {
+    ...actual,
+    listPuzzles: vi.fn(actual.listPuzzles),
+    deletePuzzle: vi.fn(actual.deletePuzzle),
+  }
+})
 
 const palette: Rgb[] = [[1, 2, 3]]
 const regions: RegionMeta[] = [
@@ -172,5 +185,34 @@ describe('LibraryRoute', () => {
     // Lô URL cũ (2 URL, cho cả A lẫn B) phải được thu hồi ngay khi lô mới
     // (1 URL, chỉ cho A) được lắp vào — không phải chỉ lúc unmount.
     expect(revoke).toHaveBeenCalledTimes(2)
+  })
+
+  it('I3: mở thư viện thất bại (IndexedDB bị chặn) → hiện lỗi kèm link tạo tranh mới, không kẹt ở "Đang tải…" mãi mãi', async () => {
+    vi.mocked(listPuzzles).mockRejectedValueOnce(new Error('IndexedDB bị chặn'))
+    renderLibrary()
+
+    // Trước khi sửa: `void reload().then(...)` không có `.catch`, promise
+    // reject rơi vào unhandled rejection, `cards` không bao giờ được set →
+    // màn đứng mãi ở "Đang tải…", và CTA header chỉ hiện khi `cards.length >
+    // 0` nên người dùng không còn lối thoát nào.
+    await waitFor(() => expect(screen.getByRole('alert')).toBeTruthy())
+    expect(screen.getByRole('link', { name: /tạo tranh mới/i })).toBeTruthy()
+  })
+
+  it('I3: xoá thất bại → hiện lỗi, card KHÔNG biến mất khỏi danh sách', async () => {
+    await seed('a', 'Tranh', 100)
+    vi.mocked(deletePuzzle).mockRejectedValueOnce(new Error('xoá lỗi'))
+    renderLibrary()
+    await waitFor(() => expect(screen.getByText('Tranh')).toBeTruthy())
+
+    await userEvent.click(screen.getByRole('button', { name: /xoá/i }))
+    await userEvent.click(screen.getByRole('button', { name: /^xoá tranh$/i }))
+
+    // Trước khi sửa: `onClick={() => void remove(askDelete)}` không có catch;
+    // `deletePuzzle` reject là unhandled rejection và hộp thoại xác nhận đứng
+    // yên không phản hồi gì, không có dấu hiệu nào cho người dùng biết.
+    await waitFor(() => expect(screen.getByRole('alert')).toBeTruthy())
+    expect(screen.getByText('Tranh')).toBeTruthy()
+    expect(await listPuzzles()).toHaveLength(1)
   })
 })

@@ -85,33 +85,47 @@ export default function NewPuzzleRoute() {
     }
   }
 
+  const [saving, setSaving] = useState(false)
+
   const save = async (): Promise<void> => {
     if (!draft || !file) return
-    const id = newPuzzleId()
-    await savePuzzle(
-      {
-        id,
-        title: title.trim() || 'Không tên',
-        createdAt: Date.now(),
-        width: draft.puzzle.width,
-        height: draft.puzzle.height,
-        colorCount: draft.puzzle.palette.length,
-        regionCount: draft.puzzle.regions.length,
-        palette: draft.puzzle.palette,
-        params: {
-          ...DEFAULT_PARAMS,
-          k: tune.k,
-          targetRegions: tune.targetRegions,
-          smoothing: tune.smoothing,
-          minArea: draft.usedMinArea,
+    setSaving(true)
+    setError(null)
+    try {
+      const id = newPuzzleId()
+      await savePuzzle(
+        {
+          id,
+          title: title.trim() || 'Không tên',
+          createdAt: Date.now(),
+          width: draft.puzzle.width,
+          height: draft.puzzle.height,
+          colorCount: draft.puzzle.palette.length,
+          regionCount: draft.puzzle.regions.length,
+          palette: draft.puzzle.palette,
+          params: {
+            ...DEFAULT_PARAMS,
+            k: tune.k,
+            targetRegions: tune.targetRegions,
+            smoothing: tune.smoothing,
+            minArea: draft.usedMinArea,
+          },
+          usedMinArea: draft.usedMinArea,
         },
-        usedMinArea: draft.usedMinArea,
-      },
-      await gzip(draft.bin),
-      await gzip(new TextEncoder().encode(draft.regionsJson)),
-      file,
-    )
-    navigate(`/play/${id}`)
+        await gzip(draft.bin),
+        await gzip(new TextEncoder().encode(draft.regionsJson)),
+        file,
+      )
+      navigate(`/play/${id}`)
+    } catch (err) {
+      // Không bắt ở đây thì đây là unhandled rejection: `gzip` ném trên
+      // Safari < 16.4 (thiếu CompressionStream), hoặc `savePuzzle` reject với
+      // QuotaExceededError (lưu cả ảnh gốc tới 15 MB cộng hai blob gz) —
+      // người dùng bấm "Lưu và tô" và không có gì xảy ra, không một dấu hiệu.
+      setError(err instanceof Error ? err.message : String(err))
+    } finally {
+      setSaving(false)
+    }
   }
 
   return (
@@ -138,8 +152,8 @@ export default function NewPuzzleRoute() {
               >
                 Sinh lại
               </button>
-              <button type="button" disabled={busy || !draft} onClick={() => void save()}>
-                Lưu và tô
+              <button type="button" disabled={busy || !draft || saving} onClick={() => void save()}>
+                {saving ? 'Đang lưu…' : 'Lưu và tô'}
               </button>
             </div>
 

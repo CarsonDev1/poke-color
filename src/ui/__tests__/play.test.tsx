@@ -16,6 +16,13 @@ import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { encodePuzzleBin, encodeRegions } from '@/core/codec/puzzle-format'
 import { gzip } from '@/data/compress'
 import { resetDatabaseForTests, savePuzzle, saveProgress, loadProgress } from '@/data/local-cache'
+
+// Mặc định uỷ nhiệm cho implementation thật; chỉ test I3 dưới đây ghi đè MỘT
+// LẦN để mô phỏng IndexedDB từ chối ghi tiến độ (vd bộ nhớ đầy).
+vi.mock('@/data/local-cache', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/data/local-cache')>()
+  return { ...actual, saveProgress: vi.fn(actual.saveProgress) }
+})
 import { DEFAULT_PARAMS, type RegionMeta, type Rgb } from '@/core/types'
 import PlayRoute from '@/routes/play'
 
@@ -325,6 +332,10 @@ describe('PlayRoute', () => {
     unmount()
     await waitFor(async () => expect((await loadProgress('p1'))?.filledCount).toBe(1))
   })
+
+  // Test I3 (lưu thất bại → hiện `paint.saveError`) nằm ở cuối file, cạnh
+  // test I12 — sau khi I12 bỏ debounce khỏi đường ghi cục bộ, save() chạy
+  // ngay khi tô (không cần giả lập bộ đếm giờ để chờ debounce 1.5s).
 
   it('C1: phục hồi tiến độ đã lưu → layer base vẽ đúng màu palette, không phải màu chưa tô', async () => {
     // vùng 0 (colorIndex 0, đỏ) đã tô từ trước — mô phỏng "vào lại /play sau

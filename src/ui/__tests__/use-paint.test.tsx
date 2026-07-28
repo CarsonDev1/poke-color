@@ -3,9 +3,18 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { act, renderHook, waitFor } from '@testing-library/react'
 import { assemblePuzzle } from '@/core/codec/puzzle-format'
 import { SoundBoard } from '@/audio/synth'
-import { loadProgress, resetDatabaseForTests } from '@/data/local-cache'
+import { loadProgress, resetDatabaseForTests, saveProgress } from '@/data/local-cache'
 import { usePaint } from '@/ui/hooks/use-paint'
 import type { Puzzle, RegionMeta, Rgb } from '@/core/types'
+
+// Mặc định uỷ nhiệm cho implementation THẬT (ghi vào fake-indexeddb) — mọi
+// test hiện có tiếp tục chạy với hành vi lưu thật. Chỉ những test I3 dưới đây
+// mới ghi đè một lần bằng `mockRejectedValueOnce` để mô phỏng IndexedDB từ
+// chối ghi (vd QuotaExceededError khi bộ nhớ trình duyệt đầy).
+vi.mock('@/data/local-cache', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/data/local-cache')>()
+  return { ...actual, saveProgress: vi.fn(actual.saveProgress) }
+})
 
 /** 6×1: 3 vùng, màu 0, 1, 1 */
 function puzzle(): Puzzle {
@@ -178,6 +187,42 @@ describe('usePaint', () => {
     await waitFor(() => {
       expect(again.result.current.filledCount).toBe(1)
     })
+  })
+
+  it('I3: lưu tiến độ thất bại (IndexedDB từ chối ghi) → saveError được set, flush KHÔNG throw', async () => {
+    const p = puzzle()
+    vi.mocked(saveProgress).mockRejectedValueOnce(new Error('QuotaExceededError'))
+    const { result } = renderHook(() => usePaint('p1', p, silentSound()))
+    act(() => result.current.selectColor(0))
+    act(() => result.current.paint(0))
+
+    // Nếu save() không tự bắt lỗi, `flush()` (await save()) sẽ reject và
+    // `act(async () => await result.current.flush())` ném ra ngoài — hỏng cả
+    // test thay vì cho ta assert saveError. Bản thân việc await không throw ở
+    // đây đã là một phần của assertion.
+    await act(async () => {
+      await result.current.flush()
+    })
+
+    expect(result.current.saveError).toMatch(/không lưu được tiến độ/i)
+  })
+
+  it('I3: lưu thành công sau một lần lỗi → saveError được xoá', async () => {
+    const p = puzzle()
+    vi.mocked(saveProgress).mockRejectedValueOnce(new Error('lỗi tạm thời'))
+    const { result } = renderHook(() => usePaint('p1', p, silentSound()))
+    act(() => result.current.selectColor(0))
+    act(() => result.current.paint(0))
+    await act(async () => {
+      await result.current.flush()
+    })
+    expect(result.current.saveError).not.toBeNull()
+
+    act(() => result.current.paint(1))
+    await act(async () => {
+      await result.current.flush()
+    })
+    expect(result.current.saveError).toBeNull()
   })
 
   it('completedAt được ghi khi hoàn thành', async () => {

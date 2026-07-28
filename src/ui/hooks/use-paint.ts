@@ -14,6 +14,8 @@ export interface PaintState {
   remaining: Uint32Array
   isComplete: boolean
   announcement: string
+  /** thông báo lỗi lưu gần nhất (vd IndexedDB đầy/bị chặn); null khi lưu ổn */
+  saveError: string | null
   /**
    * Tăng đúng MỘT LẦN, sau khi tiến độ đã lưu (nếu có) được nạp xong.
    *
@@ -46,27 +48,36 @@ export function usePaint(
   const [tick, setTick] = useState(0)
   const [revision, setRevision] = useState(0)
   const [announcement, setAnnouncement] = useState('')
+  const [saveError, setSaveError] = useState<string | null>(null)
   const activeSeconds = useRef(0)
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const dirty = useRef(false)
 
   const bump = useCallback(() => setTick((t) => t + 1), [])
 
+  // `save` PHẢI tự bắt lỗi: nó được gọi cả từ `scheduleSave` (fire-and-forget
+  // qua setTimeout, không ai await) lẫn từ `flush` (await trực tiếp, kể cả
+  // trong effect dọn dẹp lúc unmount ở `/play`). Một rejection không bắt ở
+  // nhánh đầu là unhandled rejection âm thầm (I3) — cả giờ tô mất sạch không
+  // một dấu hiệu nào; ở nhánh sau nó làm hỏng effect unmount. Bắt tại đây một
+  // lần là đủ cho cả hai đường gọi.
   const save = useCallback(async () => {
-    dirty.current = false
     const complete = engine.isComplete()
-    await saveProgress({
-      puzzleId,
-      filled: engine.toBitset(),
-      filledCount: engine.filledCount,
-      activeSeconds: activeSeconds.current,
-      completedAt: complete ? Date.now() : null,
-      updatedAt: Date.now(),
-    })
+    try {
+      await saveProgress({
+        puzzleId,
+        filled: engine.toBitset(),
+        filledCount: engine.filledCount,
+        activeSeconds: activeSeconds.current,
+        completedAt: complete ? Date.now() : null,
+        updatedAt: Date.now(),
+      })
+      setSaveError(null)
+    } catch {
+      setSaveError('Không lưu được tiến độ — bộ nhớ trình duyệt có thể đã đầy.')
+    }
   }, [engine, puzzleId])
 
   const scheduleSave = useCallback(() => {
-    dirty.current = true
     if (timer.current) clearTimeout(timer.current)
     timer.current = setTimeout(() => void save(), AUTOSAVE_DEBOUNCE_MS)
   }, [save])
@@ -179,6 +190,7 @@ export function usePaint(
     remaining,
     isComplete: engine.isComplete(),
     announcement,
+    saveError,
     revision,
     selectColor,
     paint,

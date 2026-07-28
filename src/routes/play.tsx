@@ -186,6 +186,12 @@ function PlayScreen({ puzzleId, puzzle, title }: { puzzleId: string; puzzle: Puz
         {paint.announcement}
       </p>
 
+      {paint.saveError && (
+        <p role="alert" style={{ color: '#b91c1c' }}>
+          {paint.saveError}
+        </p>
+      )}
+
       <PaletteBar
         palette={puzzle.palette}
         remaining={paint.remaining}
