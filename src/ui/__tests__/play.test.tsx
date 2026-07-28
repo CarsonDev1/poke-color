@@ -212,6 +212,30 @@ describe('PlayRoute', () => {
     await waitFor(() => expect(screen.getByAltText(/ảnh gốc/i)).toBeTruthy())
   })
 
+  it('URL ảnh gốc không bị revoke lúc đang hiện, chỉ revoke khi rời màn', async () => {
+    // `URL.revokeObjectURL` là mock DÙNG CHUNG cho cả file (đăng ký một lần ở
+    // beforeAll) — xoá lịch sử gọi trước để bài test này không bị nhiễu bởi
+    // các test khác chạy trước nó trong cùng file.
+    const revoke = URL.revokeObjectURL as ReturnType<typeof vi.fn>
+    revoke.mockClear()
+
+    const { unmount } = renderPlay()
+    await waitFor(() => expect(screen.getByText('Tranh thử')).toBeTruthy())
+
+    await userEvent.click(screen.getByRole('button', { name: /xem ảnh gốc/i }))
+    await waitFor(() => expect(screen.getByAltText(/ảnh gốc/i)).toBeTruthy())
+
+    // Ảnh đang hiển thị bằng đúng URL vừa tạo — nó KHÔNG được revoke lúc này.
+    // Nếu effect tải ảnh có `originalUrl` trong dependency array, chính
+    // setOriginalUrl(url) bên trong nó sẽ tự kích hoạt cleanup của chính lượt
+    // effect đó, và cleanup ấy đóng closure trên đúng biến `url` vừa tạo ⇒
+    // revoke ngay URL đang nằm trong `<img src>`.
+    expect(revoke).not.toHaveBeenCalled()
+
+    unmount()
+    expect(revoke).toHaveBeenCalledTimes(1)
+  })
+
   it('nút tắt tiếng đổi trạng thái', async () => {
     renderPlay()
     await waitFor(() => expect(screen.getByText('Tranh thử')).toBeTruthy())

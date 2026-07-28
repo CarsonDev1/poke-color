@@ -27,10 +27,16 @@ export default function PlayRoute() {
     loadPuzzle(id)
       .then((p) => alive && setPuzzle(p))
       .catch((e: unknown) => alive && setLoadError(e instanceof Error ? e.message : String(e)))
-    void listPuzzles().then((records) => {
-      const rec = records.find((r) => r.id === id)
-      if (alive && rec) setTitle(rec.title)
-    })
+    void listPuzzles()
+      .then((records) => {
+        const rec = records.find((r) => r.id === id)
+        if (alive && rec) setTitle(rec.title)
+      })
+      .catch(() => {
+        // tên chỉ mang tính trang trí (mặc định 'Tranh' nếu không lấy được);
+        // lỗi đọc metadata ở đây không phải lỗi tải puzzle thật (loadPuzzle ở
+        // trên đã lo phần đó), nên cố tình nuốt, không cho nổi lên thành lỗi.
+      })
     return () => {
       alive = false
     }
@@ -63,21 +69,48 @@ function PlayScreen({ puzzleId, puzzle, title }: { puzzleId: string; puzzle: Puz
   const wrapRef = useRef<HTMLDivElement>(null)
   const paintRef = useRef(paint)
   paintRef.current = paint
+  // URL hiện có của ảnh gốc (nếu đã tạo) — giữ trong ref, KHÔNG chỉ trong
+  // state `originalUrl`. Xem effect giải phóng bên dưới để hiểu vì sao.
+  const originalUrlRef = useRef<string | null>(null)
 
-  // ảnh gốc chỉ tải khi thực sự cần (bấm xem, hoặc hoàn thành)
+  // ảnh gốc chỉ tải khi thực sự cần (bấm xem, hoặc hoàn thành).
+  // Gate trên `originalUrlRef` (không phải state `originalUrl`), và
+  // `originalUrl` KHÔNG nằm trong dependency: nếu để state đó trong deps,
+  // chính `setOriginalUrl(url)` bên dưới sẽ khiến effect này chạy lại ngay
+  // sau khi tạo URL — và cleanup của lượt effect VỪA XONG (đóng closure trên
+  // đúng biến `url` đó) sẽ revoke ngay URL vừa render vào `<img>`. Ảnh có vỡ
+  // hay không tuỳ trình duyệt đã đọc xong blob trước khi revoke đến hay chưa
+  // — lỗi ngắt quãng, khó bắt sau này. Giải phóng URL là trách nhiệm của một
+  // effect RIÊNG (bên dưới), chỉ theo `puzzleId`, không theo mỗi lần render.
   useEffect(() => {
     if (!peek && !showDone) return
-    if (originalUrl) return
-    let url: string | null = null
+    if (originalUrlRef.current) return
+    let alive = true
     void loadOriginal(puzzleId).then((blob) => {
-      if (!blob) return
-      url = URL.createObjectURL(blob)
+      // `alive` chặn trường hợp promise về sau khi effect này đã bị huỷ
+      // (đổi puzzle, unmount, hoặc peek/showDone tắt rồi bật lại) — nếu
+      // không, URL được tạo ra mà không ai còn cầm để revoke.
+      if (!blob || !alive) return
+      const url = URL.createObjectURL(blob)
+      originalUrlRef.current = url
       setOriginalUrl(url)
     })
     return () => {
-      if (url) URL.revokeObjectURL(url)
+      alive = false
     }
-  }, [peek, showDone, originalUrl, puzzleId])
+  }, [peek, showDone, puzzleId])
+
+  // Giải phóng URL ảnh gốc — tách riêng khỏi effect tải ở trên. Chỉ chạy khi
+  // đổi puzzle hoặc rời màn (deps `[puzzleId]`), không phải mỗi khi
+  // `originalUrl` đổi, nên không thể tự revoke URL nó vừa mới cấp.
+  useEffect(() => {
+    return () => {
+      if (originalUrlRef.current) {
+        URL.revokeObjectURL(originalUrlRef.current)
+        originalUrlRef.current = null
+      }
+    }
+  }, [puzzleId])
 
   useEffect(() => {
     if (paint.isComplete) setShowDone(true)
