@@ -39,6 +39,22 @@ interface BlobRecord {
   original: Blob
 }
 
+/**
+ * Bốn store, tách theo kích cỡ và tần suất ghi/đọc — không phải tuỳ tiện:
+ *
+ * - `puzzles`: metadata NHẸ (vài trăm byte/bản ghi) — đây là thứ `listPuzzles()`
+ *   đọc để dựng lưới thẻ ở `/library`.
+ * - `blobs`: NẶNG (bin/regions nén + ẢNH GỐC, có thể tới hàng MB mỗi puzzle).
+ * - `progress`: bitset ~100 byte, bị GHI LẠI toàn bộ ở MỖI lần tô (spec §8:
+ *   ghi ngay, không debounce — xem usePaint.save).
+ * - `thumbnails`: đọc bởi lưới `/library` để hiện ảnh xem trước.
+ *
+ * Gộp các store này lại (ví dụ nhét ảnh gốc và bin vào cùng bản ghi với
+ * metadata) sẽ buộc `listPuzzles()` phải kéo ẢNH GỐC của MỌI puzzle vào bộ
+ * nhớ chỉ để vẽ một lưới thẻ (spec §16 cảnh báo đúng về chi phí này), và mỗi
+ * lần autosave tiến độ (rất thường xuyên) sẽ phải ghi lại luôn cả những MB dữ
+ * liệu không đổi đó.
+ */
 interface Schema extends DBSchema {
   puzzles: { key: string; value: PuzzleRecord; indexes: { createdAt: number } }
   blobs: { key: string; value: BlobRecord }
