@@ -1,4 +1,4 @@
-import { useId, useState, type DragEvent } from 'react'
+import { useEffect, useId, useState, type DragEvent } from 'react'
 import { validateUpload } from '@/data/validate-upload'
 
 export function Dropzone({
@@ -9,17 +9,28 @@ export function Dropzone({
   error: string | null
 }) {
   const inputId = useId()
-  const [localError, setLocalError] = useState<string | null>(null)
+  // Lỗi hiện tại cần thấy, dù nguồn là validate cục bộ hay `error` truyền từ
+  // ngoài vào. Đây KHÔNG được ghép bằng `localError ?? error`: khi accept()
+  // chấp nhận một file mới hợp lệ, nó đặt lại về null — nhưng `null ?? error`
+  // lại rơi về `error` cũ, tức là hiện lại đúng lỗi vừa được xoá. File mới đã
+  // được chấp nhận thì lỗi của lần thử trước (dù đến từ đâu) đã lỗi thời và
+  // không được hiện tiếp, cho tới khi ngoài truyền vào một lỗi MỚI.
+  const [displayError, setDisplayError] = useState<string | null>(error)
   const [dragging, setDragging] = useState(false)
+
+  // đồng bộ khi ngoài truyền vào lỗi mới (vd: lần sinh lại tiếp theo thất bại)
+  useEffect(() => {
+    setDisplayError(error)
+  }, [error])
 
   const accept = (file: File | undefined): void => {
     if (!file) return
     const bad = validateUpload({ name: file.name, type: file.type, size: file.size })
     if (bad) {
-      setLocalError(bad.message)
+      setDisplayError(bad.message)
       return
     }
-    setLocalError(null)
+    setDisplayError(null)
     onFile(file)
   }
 
@@ -29,7 +40,7 @@ export function Dropzone({
     accept(e.dataTransfer.files[0])
   }
 
-  const shown = localError ?? error
+  const shown = displayError
 
   return (
     <div>

@@ -72,6 +72,10 @@ export default function NewPuzzleRoute() {
   const onFile = async (f: File): Promise<void> => {
     setFile(f)
     setTitle(f.name.replace(/\.[^.]+$/, ''))
+    // xoá lỗi cũ ngay khi bắt đầu chọn ảnh mới — nếu không, khoảng chờ
+    // decodeToRgba (bất đồng bộ) sẽ hiện lỗi của lần trước lên màn tinh chỉnh
+    // của ảnh mới, dù ảnh mới chưa hề chạy tới bước đó
+    setError(null)
     try {
       const img = await decodeToRgba(f)
       imageRef.current = img
@@ -144,6 +148,7 @@ export default function NewPuzzleRoute() {
               onClick={() => {
                 setFile(null)
                 setDraft(null)
+                setError(null)
                 imageRef.current = null
               }}
               style={{ justifySelf: 'start', background: 'none', border: 0, color: '#2563eb', padding: 0 }}

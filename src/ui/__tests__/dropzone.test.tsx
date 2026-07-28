@@ -56,4 +56,15 @@ describe('Dropzone', () => {
     render(<Dropzone onFile={vi.fn()} error="Vỡ ở bước Gộp vùng vụn" />)
     expect(screen.getByRole('alert').textContent).toMatch(/Gộp vùng vụn/)
   })
+
+  it('chọn được file hợp lệ sau khi có lỗi cũ → lỗi cũ không còn hiện nữa', async () => {
+    const onFile = vi.fn()
+    render(<Dropzone onFile={onFile} error="Vỡ ở bước Gộp vùng vụn" />)
+    expect(screen.getByRole('alert')).toBeTruthy()
+
+    await userEvent.upload(screen.getByLabelText(/chọn ảnh/i), pngFile())
+
+    expect(onFile).toHaveBeenCalledTimes(1)
+    expect(screen.queryByRole('alert')).toBeNull()
+  })
 })
