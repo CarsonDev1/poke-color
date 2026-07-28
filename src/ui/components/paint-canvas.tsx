@@ -150,6 +150,14 @@ export function PaintCanvas({
       case 'Enter':
       case ' ':
         e.preventDefault()
+        // Đang pan (Space giữ + kéo, hoặc chuột giữa) thì bỏ qua nhánh tô: nếu
+        // không, phím giữ (auto-repeat của OS) sẽ phát lại keydown liên tục
+        // suốt lúc kéo và gọi onPaintRegion hết lần này đến lần khác. Hai điều
+        // kiện tách biệt: `dragMode.current === 'pan'` chặn trường hợp một
+        // phím KHÔNG lặp lại tới trong lúc đang pan; `e.repeat` chặn trường
+        // hợp giữ phím khi CHƯA pan (giữ Enter/Space đứng yên cũng không nên
+        // tô lặp lại mỗi tick auto-repeat).
+        if (dragMode.current === 'pan' || e.repeat) return
         if (selectedColor !== null) {
           lastRegion.current = null
           const id = focusRegion
@@ -205,6 +213,12 @@ export function PaintCanvas({
         outlineOffset: 2,
       }}
     >
+      {/*
+        `base`/`overlay` kích thước ẢNH, dịch/co bằng CSS transform: zoom hay
+        pan chỉ đổi transform, không vẽ lại bitmap — rẻ, mượt ở mọi mức zoom.
+        `labels` kích thước MÀN HÌNH và vẽ lại theo scale hiện tại, vì số phải
+        luôn cùng cỡ chữ đọc được dù ảnh phóng to hay thu nhỏ bao nhiêu.
+      */}
       <canvas
         ref={baseRef}
         width={puzzle.width}

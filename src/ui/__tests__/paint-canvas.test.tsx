@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, beforeAll } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { fireEvent, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { assemblePuzzle } from '@/core/codec/puzzle-format'
 import { PaintEngine } from '@/core/engine/paint-engine'
@@ -71,14 +71,14 @@ function puzzle(): Puzzle {
   return assemblePuzzle({ width: 4, height: 1, palette, regionCount: 4, regionMap }, regions)
 }
 
-// Chỉ `selectedColor` và `height` từng bị ghi đè trong các test dưới đây.
-// Giữ `over` hẹp đúng bằng đó thay vì `Partial<toàn bộ props>`: nếu
+// Chỉ `selectedColor`, `height` và `width` từng bị ghi đè trong các test dưới
+// đây. Giữ `over` hẹp đúng bằng đó thay vì `Partial<toàn bộ props>`: nếu
 // `onPaintRegion`/`onFirstPointer` cũng nằm trong kiểu có thể ghi đè,
 // TypeScript suy ra kiểu hợp nhất `Mock | (regionId: number) => void` cho
 // hai trường đó (vì phía `over` là optional), và union ấy mất thuộc tính
 // `.mock` mà các assertion bên dưới cần — `erasableSyntaxOnly` không bắt lỗi
 // này nhưng `tsc --noEmit` thì có.
-function setup(over: Partial<Pick<Parameters<typeof PaintCanvas>[0], 'selectedColor' | 'height'>> = {}) {
+function setup(over: Partial<Pick<Parameters<typeof PaintCanvas>[0], 'selectedColor' | 'height' | 'width'>> = {}) {
   const p = puzzle()
   const props = {
     puzzle: p,
@@ -92,6 +92,18 @@ function setup(over: Partial<Pick<Parameters<typeof PaintCanvas>[0], 'selectedCo
   }
   render(<PaintCanvas {...props} />)
   return props
+}
+
+/** layer `base` luôn là canvas đầu tiên trong DOM (thứ tự base → overlay → labels) */
+function baseCanvas(surface: HTMLElement): HTMLElement {
+  return surface.querySelectorAll('canvas')[0] as HTMLElement
+}
+
+/** đọc lại `translate(txpx, typx) scale(s)` mà component đặt trên layer base/overlay */
+function parseTransform(el: HTMLElement): { tx: number; ty: number; scale: number } {
+  const m = /translate\(([-\d.]+)px, ([-\d.]+)px\) scale\(([-\d.]+)\)/.exec(el.style.transform)
+  if (!m) throw new Error(`không đọc được transform: "${el.style.transform}"`)
+  return { tx: Number(m[1]), ty: Number(m[2]), scale: Number(m[3]) }
 }
 
 describe('PaintCanvas', () => {
@@ -187,5 +199,120 @@ describe('PaintCanvas', () => {
     const surface = screen.getByRole('application', { name: /tranh tô màu/i })
     await userEvent.pointer({ target: surface, coords: { clientX: 150, clientY: 50 }, keys: '[MouseLeft]' })
     expect(props.onPaintRegion).not.toHaveBeenCalled()
+  })
+
+  // Các test zoom/pan dưới đây dùng khung 8×4 thay vì 400×100 của các test
+  // trên. Lý do: ảnh 4×1 khớp (fit) vào khung 400×100 cho scale = 100, đã
+  // VƯỢT QUÁ MAX_SCALE (24) — nghĩa là bất cứ thao tác zoom nào từ đó
+  // (dù zoom in hay out) đều bị kẹp thẳng xuống 24, hai hướng cho cùng một
+  // kết quả, không thể phân biệt được. Tệ hơn, ở mọi scale hợp lệ (≤ 24) ảnh
+  // 4×1 vẫn nhỏ hơn khung 400×100 trên cả hai chiều, nên `clampPan` luôn canh
+  // giữa và mọi phép pan đều bị ghi đè về (0,0) — không có gì để pan tới.
+  // Khung 8×4 (cùng ảnh 4×1) cho scale fit = 2, nằm gọn trong [0.2, 24], và ở
+  // scale cao hơn ảnh vượt khung theo chiều ngang nên pan thật sự có tác dụng.
+  it('phím + tăng scale, phím - giảm scale, phím f trả về đúng scale fit', () => {
+    setup({ width: 8, height: 4 })
+    const surface = screen.getByRole('application', { name: /tranh tô màu/i })
+    const base = baseCanvas(surface)
+
+    // fit: ảnh 4×1 trong khung 8×4 ⇒ scale = min(8/4, 4/1) = 2
+    expect(parseTransform(base).scale).toBeCloseTo(2, 5)
+
+    fireEvent.keyDown(surface, { key: '-' }) // 2 × 0.8 = 1.6
+    expect(parseTransform(base).scale).toBeCloseTo(1.6, 5)
+
+    fireEvent.keyDown(surface, { key: '+' }) // 1.6 × 1.25 = 2
+    fireEvent.keyDown(surface, { key: '+' }) // 2 × 1.25 = 2.5
+    expect(parseTransform(base).scale).toBeCloseTo(2.5, 5)
+
+    fireEvent.keyDown(surface, { key: 'f' }) // fit lại đúng scale ban đầu (2 ≠ 2.5 nên phân biệt được)
+    expect(parseTransform(base).scale).toBeCloseTo(2, 5)
+  })
+
+  it('cuộn chuột (deltaY âm) tăng scale', () => {
+    setup({ width: 8, height: 4 })
+    const surface = screen.getByRole('application', { name: /tranh tô màu/i })
+    const base = baseCanvas(surface)
+
+    const before = parseTransform(base).scale // fit = 2
+    fireEvent.wheel(surface, { deltaY: -100, clientX: 4, clientY: 2 })
+    const after = parseTransform(base).scale
+
+    // onWheel: deltaY < 0 ⇒ factor 1.15 ⇒ 2 × 1.15 = 2.3 (chưa chạm MAX_SCALE)
+    expect(after).toBeCloseTo(2.3, 5)
+    expect(after).toBeGreaterThan(before)
+  })
+
+  it('cuộn chuột phóng to tại một điểm vẫn giữ đúng vùng nằm dưới điểm đó', async () => {
+    const props = setup({ width: 8, height: 4 })
+    const surface = screen.getByRole('application', { name: /tranh tô màu/i })
+
+    // fit: scale 2, tx 0, ty 1 (canh giữa dọc: (4 - 1×2)/2 = 1).
+    // Vùng 3 (colorIndex 1) trải image-x [3,4); điểm GIỮA vùng là ảnh (3.5, 0.5)
+    // ⇒ màn hình (0 + 3.5×2, 1 + 0.5×2) = (7, 2).
+    await userEvent.pointer({ target: surface, coords: { clientX: 7, clientY: 2 }, keys: '[MouseLeft]' })
+    expect(props.onPaintRegion).toHaveBeenCalledWith(3)
+    props.onPaintRegion.mockClear()
+
+    // zoomAbout giữ điểm ẢNH dưới con trỏ (7,2) cố định khi zoom quanh đúng
+    // điểm đó — nên bấm lại đúng (7,2) sau khi zoom phải trúng lại vùng 3.
+    fireEvent.wheel(surface, { deltaY: -100, clientX: 7, clientY: 2 })
+    await userEvent.pointer({ target: surface, coords: { clientX: 7, clientY: 2 }, keys: '[MouseLeft]' })
+    expect(props.onPaintRegion).toHaveBeenCalledWith(3)
+  })
+
+  it('kéo chuột giữa: pan (transform đổi) chứ không tô', () => {
+    const props = setup({ width: 8, height: 4 })
+    const surface = screen.getByRole('application', { name: /tranh tô màu/i })
+    const base = baseCanvas(surface)
+
+    // Zoom quanh tâm (4,2) trước để ảnh vượt khung theo chiều ngang, có chỗ để pan:
+    // scale 2 → 2.5 (2×1.25); tx: px=(4-0)/2=2 ⇒ tx' = 0 + 2×(2-2.5) = -1
+    // (clampPan giữ nguyên vì rộng ảnh 10 > khung 8, -1 nằm trong [-2, 0]).
+    fireEvent.keyDown(surface, { key: '+' })
+    const before = parseTransform(base)
+    expect(before.tx).toBeCloseTo(-1, 5)
+    props.onPaintRegion.mockClear()
+
+    fireEvent.pointerDown(surface, { button: 1, clientX: 4, clientY: 2, pointerId: 1 })
+    fireEvent.pointerMove(surface, { clientX: 3, clientY: 2, pointerId: 1 })
+    fireEvent.pointerUp(surface, { pointerId: 1 })
+
+    const after = parseTransform(base)
+    // panBy dịch tx thêm (3-4) = -1 ⇒ -1 + (-1) = -2, vẫn trong [-2,0] nên clampPan giữ nguyên
+    expect(after.tx).toBeCloseTo(-2, 5)
+    expect(props.onPaintRegion).not.toHaveBeenCalled()
+  })
+
+  it('giữ Space rồi kéo chuột: pan (transform đổi) chứ không tô; auto-repeat của Space lúc đang pan không tô lại', () => {
+    const props = setup({ width: 8, height: 4 })
+    const surface = screen.getByRole('application', { name: /tranh tô màu/i })
+    const base = baseCanvas(surface)
+
+    // Cùng phép zoom-quanh-tâm như test kéo chuột giữa ở trên: tx trước khi pan = -1
+    fireEvent.keyDown(surface, { key: '+' })
+    const before = parseTransform(base)
+    expect(before.tx).toBeCloseTo(-1, 5)
+
+    // Một lần bấm Space đơn lẻ (chưa pan) vẫn tô vùng đang focus như cũ — hành
+    // vi này KHÔNG đổi (xem test "Space cũng tô vùng đang focus"). Ta chỉ
+    // quan tâm những gì xảy ra TỪ lúc bắt đầu kéo, nên xoá lịch sử gọi ở đây.
+    fireEvent.keyDown(surface, { key: ' ' })
+    props.onPaintRegion.mockClear()
+
+    fireEvent.pointerDown(surface, { button: 0, clientX: 4, clientY: 2, pointerId: 1 })
+    fireEvent.pointerMove(surface, { clientX: 3, clientY: 2, pointerId: 1 })
+
+    const after = parseTransform(base)
+    expect(after.tx).toBeCloseTo(-2, 5) // giống hệt phép tính ở test kéo chuột giữa
+    expect(props.onPaintRegion).not.toHaveBeenCalled() // đang pan: kéo chuột không tô
+
+    // OS phát lại (auto-repeat) sự kiện keydown Space liên tục suốt lúc giữ
+    // phím — case ' ' trong onKeyDown phải bỏ qua nhánh tô khi đang pan
+    // (dragMode === 'pan') hoặc khi đây là sự kiện lặp lại (e.repeat).
+    fireEvent.keyDown(surface, { key: ' ', repeat: true })
+    expect(props.onPaintRegion).not.toHaveBeenCalled()
+
+    fireEvent.pointerUp(surface, { pointerId: 1 })
   })
 })
