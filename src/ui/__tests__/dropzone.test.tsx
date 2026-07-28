@@ -57,6 +57,22 @@ describe('Dropzone', () => {
     expect(screen.getByRole('alert').textContent).toMatch(/Gộp vùng vụn/)
   })
 
+  it('I8: input chọn ảnh nằm trong tab order — người dùng chỉ dùng bàn phím tới được được nó', async () => {
+    render(<Dropzone onFile={vi.fn()} error={null} />)
+    const input = screen.getByLabelText(/chọn ảnh/i)
+
+    // `display: none` (và `visibility: hidden`) loại phần tử khỏi cả tab
+    // order lẫn accessibility tree. `<label>` không tự nhận focus, nên nếu
+    // input bị loại, không có cách nào mở được dialog chọn file bằng bàn
+    // phím — không thể tạo puzzle nào. `input.focus()` trực tiếp KHÔNG bắt
+    // được lỗi này: jsdom không mô phỏng việc trình duyệt từ chối focus lập
+    // trình trên phần tử display:none, nhưng thuật toán tính tab order riêng
+    // của user-event (bắt buộc vì jsdom không có Tab điều hướng gốc) thì có
+    // — đây là lý do dùng `userEvent.tab()` thay vì gọi `.focus()` thẳng.
+    await userEvent.tab()
+    expect(document.activeElement).toBe(input)
+  })
+
   it('chọn được file hợp lệ sau khi có lỗi cũ → lỗi cũ không còn hiện nữa', async () => {
     const onFile = vi.fn()
     render(<Dropzone onFile={onFile} error="Vỡ ở bước Gộp vùng vụn" />)

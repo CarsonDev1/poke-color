@@ -71,7 +71,13 @@ export function Dropzone({
           aria-label="Chọn ảnh"
           type="file"
           accept="image/png,image/jpeg,image/webp"
-          style={{ display: 'none' }}
+          // sr-only, KHÔNG `display: none`/`visibility: hidden`: cả hai loại
+          // phần tử khỏi tab order lẫn accessibility tree, và `<label>` (dù
+          // forward click tới input) không tự nhận focus — người dùng chỉ
+          // dùng bàn phím sẽ không có cách nào mở được dialog chọn file
+          // (I8). Giữ trong layout (position: absolute, không dùng
+          // display/visibility) để trình duyệt vẫn coi input là focusable.
+          style={{ position: 'absolute', width: 1, height: 1, opacity: 0, overflow: 'hidden' }}
           onChange={(e) => accept(e.target.files?.[0])}
         />
       </label>
