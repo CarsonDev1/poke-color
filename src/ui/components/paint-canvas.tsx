@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type PointerEvent, type KeyboardEvent, type WheelEvent } from 'react'
-import type { PaintEngine } from '@/core/engine/paint-engine'
+import type { PaintEngine, PaintResult } from '@/core/engine/paint-engine'
 import type { Puzzle } from '@/core/types'
 import { buildOutlineImageData, paintAllRegions, paintRegion, rgbCss, UNFILLED_COLOR } from '@/render/layers'
 import { drawHighlight } from '@/render/highlight'
@@ -22,7 +22,14 @@ export function PaintCanvas({
   puzzle: Puzzle
   engine: PaintEngine
   selectedColor: number | null
-  onPaintRegion: (regionId: number) => void
+  /**
+   * Trả `PaintResult` của lượt tô (I14) — `PaintCanvas` chỉ vẽ lạc quan lên
+   * canvas khi `status === 'filled'`, KHÔNG tự phán bằng
+   * `regions[id].colorIndex`/`engine.isFilled`: `PaintEngine.tryPaint` (được
+   * gọi bên trong `onPaintRegion`) là nơi DUY NHẤT quyết định một lượt tô có
+   * hợp lệ hay không.
+   */
+  onPaintRegion: (regionId: number) => PaintResult | undefined
   onFirstPointer: () => void
   width: number
   height: number
@@ -83,18 +90,18 @@ export function PaintCanvas({
     return { x: e.clientX - rect.left, y: e.clientY - rect.top }
   }
 
-  /** tô một vùng: cập nhật canvas ngay rồi báo lên trên */
+  /** tô một vùng: báo lên cha (nguồn quyết định duy nhất), rồi cập nhật canvas nếu cha nói đã tô */
   const tryPaintAt = (sx: number, sy: number): void => {
     if (selectedColor === null) return
     const id = hitTestRegion(view, puzzle.regionMap, puzzle.width, puzzle.height, sx, sy)
     if (id === null || id === lastRegion.current) return
     lastRegion.current = id
 
-    if (puzzle.regions[id].colorIndex === selectedColor && !engine.isFilled(id)) {
+    const result = onPaintRegion(id)
+    if (result?.status === 'filled') {
       const ctx = baseRef.current?.getContext('2d')
       if (ctx) paintRegion(ctx, puzzle, id, rgbCss(puzzle.palette[selectedColor]))
     }
-    onPaintRegion(id)
   }
 
   const onPointerDown = (e: PointerEvent<HTMLDivElement>): void => {
@@ -174,11 +181,11 @@ export function PaintCanvas({
         if (selectedColor !== null) {
           lastRegion.current = null
           const id = focusRegion
-          if (puzzle.regions[id].colorIndex === selectedColor && !engine.isFilled(id)) {
+          const result = onPaintRegion(id)
+          if (result?.status === 'filled') {
             const ctx = baseRef.current?.getContext('2d')
             if (ctx) paintRegion(ctx, puzzle, id, rgbCss(puzzle.palette[selectedColor]))
           }
-          onPaintRegion(id)
         }
         return
       case '+':

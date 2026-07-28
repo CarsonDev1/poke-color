@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { SoundBoard } from '@/audio/synth'
-import { PaintEngine } from '@/core/engine/paint-engine'
+import { PaintEngine, type PaintResult } from '@/core/engine/paint-engine'
 import type { Puzzle } from '@/core/types'
 import { loadProgress, saveProgress } from '@/data/local-cache'
 
@@ -37,7 +37,17 @@ export function usePaint(
   sound: SoundBoard,
 ): PaintState & {
   selectColor: (i: number) => void
-  paint: (regionId: number) => void
+  /**
+   * Trả `PaintResult` của `PaintEngine.tryPaint` (hoặc `undefined` nếu chưa
+   * chọn màu) — đây là NGUỒN DUY NHẤT quyết định một lượt tô có hợp lệ hay
+   * không (I14). `PaintCanvas` chỉ vẽ lạc quan lên canvas khi
+   * `status === 'filled'`; nó không còn tự kiểm tra
+   * `regions[id].colorIndex`/`engine.isFilled` — hai bản sao của đúng
+   * predicate này (`tryPaint` ở trên) từng nằm rải rác ở view layer (bấm
+   * chuột và bàn phím), lặng lẽ trôi dạt nếu `tryPaint` đổi luật mà view
+   * không cập nhật theo.
+   */
+  paint: (regionId: number) => PaintResult | undefined
   reset: () => void
   flush: () => Promise<void>
 } {
@@ -139,15 +149,15 @@ export function usePaint(
   const selectColor = useCallback((i: number) => setSelectedColor(i), [])
 
   const paint = useCallback(
-    (regionId: number) => {
-      if (selectedColor === null) return
+    (regionId: number): PaintResult | undefined => {
+      if (selectedColor === null) return undefined
 
       const r = engine.tryPaint(regionId, selectedColor)
       if (r.status === 'rejected') {
         sound.reject()
-        return
+        return r
       }
-      if (r.status === 'already') return
+      if (r.status === 'already') return r
 
       const left = engine.remainingByColor(colorCount)
       const complete = engine.isComplete()
@@ -170,6 +180,7 @@ export function usePaint(
       )
       bump()
       scheduleSave()
+      return r
     },
     [selectedColor, engine, colorCount, sound, bump, scheduleSave],
   )

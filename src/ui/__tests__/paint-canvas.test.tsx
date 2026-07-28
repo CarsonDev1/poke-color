@@ -2,9 +2,14 @@ import { describe, expect, it, vi, beforeAll } from 'vitest'
 import { fireEvent, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { assemblePuzzle } from '@/core/codec/puzzle-format'
-import { PaintEngine } from '@/core/engine/paint-engine'
+import { PaintEngine, type PaintResult } from '@/core/engine/paint-engine'
 import { PaintCanvas } from '@/ui/components/paint-canvas'
 import type { Puzzle, RegionMeta, Rgb } from '@/core/types'
+
+// Ghi lại `fillStyle` TẠI THỜI ĐIỂM gọi fillRect (không phải giá trị cuối
+// cùng của ctx, vốn bị các lần vẽ sau ghi đè) — cần để test I14 phân biệt
+// được canvas có tô lạc quan (optimistic paint) bằng màu palette hay không.
+const fillRectCalls: { fillStyle: string }[] = []
 
 beforeAll(() => {
   // jsdom không có canvas 2D thật; stub đủ để component chạy
@@ -16,7 +21,9 @@ beforeAll(() => {
     textAlign: '',
     textBaseline: '',
     globalAlpha: 1,
-    fillRect: vi.fn(),
+    fillRect: vi.fn(() => {
+      fillRectCalls.push({ fillStyle: String(ctx.fillStyle) })
+    }),
     clearRect: vi.fn(),
     drawImage: vi.fn(),
     fillText: vi.fn(),
@@ -84,7 +91,7 @@ function setup(over: Partial<Pick<Parameters<typeof PaintCanvas>[0], 'selectedCo
     puzzle: p,
     engine: new PaintEngine(p.regions),
     selectedColor: 0 as number | null,
-    onPaintRegion: vi.fn<(regionId: number) => void>(),
+    onPaintRegion: vi.fn<(regionId: number) => PaintResult | undefined>(),
     onFirstPointer: vi.fn<() => void>(),
     width: 400,
     height: 100,
@@ -193,6 +200,39 @@ describe('PaintCanvas', () => {
     ])
 
     expect(props.onPaintRegion.mock.calls.filter((c) => c[0] === 0)).toHaveLength(1)
+  })
+
+  it('I14: cha trả status "rejected" → canvas KHÔNG tô lạc quan (không tự phán bằng regions[id].colorIndex/engine.isFilled)', async () => {
+    const props = setup()
+    props.onPaintRegion.mockReturnValue({ status: 'rejected', expected: 1 } as PaintResult)
+    fillRectCalls.length = 0
+    const surface = screen.getByRole('application', { name: /tranh tô màu/i })
+
+    // fit: ảnh 4×1 trong khung 400×100 ⇒ scale 100; điểm (150,50) trúng vùng 1
+    await userEvent.pointer({ target: surface, coords: { clientX: 150, clientY: 50 }, keys: '[MouseLeft]' })
+
+    // selectedColor mặc định = 0 (đỏ, palette[0]) — nếu view vẫn tự phán theo
+    // predicate cũ (`regions[1].colorIndex === selectedColor`, ở đây SAI vì
+    // vùng 1 màu 1) thì đằng nào cũng không tô; test này phải phân biệt được
+    // với trường hợp cha nói "filled" (dưới đây) chứ không phải trùng hợp
+    // false vì hai lý do khác nhau — xem test kế tiếp.
+    expect(fillRectCalls.some((c) => c.fillStyle === 'rgb(255,0,0)')).toBe(false)
+  })
+
+  it('I14: cha trả status "filled" → canvas tô lạc quan bằng đúng màu đang chọn', async () => {
+    const props = setup()
+    props.onPaintRegion.mockReturnValue({ status: 'filled' } as PaintResult)
+    fillRectCalls.length = 0
+    const surface = screen.getByRole('application', { name: /tranh tô màu/i })
+
+    await userEvent.pointer({ target: surface, coords: { clientX: 150, clientY: 50 }, keys: '[MouseLeft]' })
+
+    // Cha (usePaint.paint) là nơi DUY NHẤT quyết định filled/rejected/already
+    // (qua PaintEngine.tryPaint) — ở đây selectedColor=0 (đỏ) trong khi vùng 1
+    // thực ra là màu 1: nếu view còn tự kiểm tra `regions[id].colorIndex`
+    // (predicate cũ), nó sẽ từ chối vẽ dù cha đã nói "filled", và test này sẽ
+    // fail. Test khẳng định view giờ CHỈ tin vào PaintResult của cha.
+    expect(fillRectCalls.some((c) => c.fillStyle === 'rgb(255,0,0)')).toBe(true)
   })
 
   it('chưa chọn màu thì không tô', async () => {
