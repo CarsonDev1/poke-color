@@ -468,3 +468,62 @@ Cắt vùng bằng đường vẽ tay (D12) · leaderboard toàn cầu (D11) · 
 2. Chạy tay hết vòng: đăng nhập → upload một tranh Pokémon có môi trường → tinh chỉnh preview → lưu → gộp vài vùng vụn trong editor → tô tới 100% → thấy tranh hoàn chỉnh + ảnh gốc → in ra PDF 1 trang không hở kẽ → bật chia sẻ → mở link ở cửa sổ ẩn danh, ảnh gốc bị ẩn, tô được, tiến độ giữ sau khi refresh.
 3. Tắt mạng giữa lúc tô → vẫn tô được, bật lại mạng → tiến độ đẩy lên đủ.
 4. Màn chơi dùng được hoàn toàn bằng bàn phím, `aria-live` thông báo tiến độ.
+
+---
+
+## 22. Bổ sung: mật độ chi tiết ngang trang sách + nhãn chữ-số
+
+**Ngày:** 2026-07-28. **Nguồn:** chủ dự án đưa ảnh chụp một trang thật của sách tham chiếu và yêu cầu output phải chi tiết tương đương.
+
+### Vì sao phải sửa spec
+
+Bản spec gốc giả định **vùng vụn là xấu** và dựng cả Stage 1 để diệt nó: median 2 lượt cộng bilateral 2 lượt, `minArea` tự dò về ~500 vùng, và §17 cảnh báo khi vượt 2000 vùng là "quá vụn".
+
+Trang sách thật chứng minh giả định đó sai. Nó có **hàng nghìn vùng nhỏ bám theo texture** của nước, núi và mây — và đó chính là thứ tạo ra sản phẩm. Kiểm chứng trên browser cho thấy pipeline hiện tại ra 303 vùng với vùng lớn phẳng, thô hơn tham chiếu vài bậc.
+
+Vậy đây không phải nới tham số, mà **đảo lại mặc định**: Stage 1 phải giữ chi tiết chứ không xoá nó.
+
+### Bảng nhãn: 30 ký tự, chữ-số
+
+Legend của trang sách chạy `1 2 3 4 5 6 7 8 9 0` rồi `a b c d e f h k l m n p r s t u v x y z` — đúng **30 màu**. Nó **cố tình bỏ `g i j o q w`**, để tránh nhầm lẫn khi in nhỏ: `g`↔`9`, `i`↔`1`, `o`↔`0`, `q`↔`9`, `j`↔`i`, `w`↔`vv`. Sao chép nguyên quy ước này.
+
+```
+LABEL_ALPHABET = "1234567890abcdefhklmnprstuvxyz"   // đúng 30 ký tự
+labelFor(colorIndex) = LABEL_ALPHABET[colorIndex]
+```
+
+**Bắt buộc dùng một hàm duy nhất.** Hiện nhãn được sinh ở bốn chỗ: `label-layer.ts` dùng `String(r.colorIndex + 1)`, và `palette-bar.tsx` dùng `i + 1` ở ba chỗ (nhãn hiển thị và hai nhánh `aria-label`). Bốn chỗ này phải gọi cùng một `labelFor`, vì nhãn in trên tranh mà lệch nhãn trên nút là lỗi không type checker nào bắt được và người dùng thì gặp ngay.
+
+### Giá trị mặc định mới
+
+| Tham số | Cũ | Mới | Lý do |
+|---|---|---|---|
+| `maxDim` | 1400 | **2000** | Vùng nhỏ cần đủ pixel để tồn tại qua Stage 4 và đủ chỗ đặt nhãn |
+| `k` cho phép | 6–24 | **6–30** | Legend tham chiếu có 30 màu |
+| `k` mặc định | 12 | **24** | |
+| `targetRegions` cho phép | 50–2000 | **200–6000** | |
+| `smoothing` mặc định | 2 | **0** | Bilateral mạnh xoá đúng cái texture tạo nên độ chi tiết |
+| `minLabelRadius` | 7 | **3** | Ở 7px thì hàng nghìn vùng nhỏ sẽ không có nhãn nào |
+| `MAX_GOOD_REGIONS` | 2000 | **8000** | 2000 giờ là mức bình thường, không phải "quá vụn" |
+| `MIN_GOOD_REGIONS` | 20 | 20 | Không đổi |
+
+Median 3×3 vẫn giữ 2 lượt: nó khử noise JPEG mà không phá cạnh, và Task 30 đã đảm bảo nó không bịa màu. Chỉ bilateral bị hạ về 0 mặc định.
+
+### Preset mới
+
+| Preset | `k` | `targetRegions` | Dùng cho |
+|---|---|---|---|
+| Dễ | 10 | 400 | Trẻ nhỏ, tô nhanh |
+| Vừa | 16 | 1200 | |
+| Khó | 24 | 3000 | |
+| **Ngang sách** | **30** | **4500** | Bằng mật độ trang sách tham chiếu |
+
+### Điều spec gốc nói đúng và vẫn giữ
+
+Rủi ro **R1** ("chất lượng segmentation *là* sản phẩm") vẫn đúng, chỉ đổi chiều: trước là lo vụn quá, giờ là lo mất chi tiết. Bước **preview bắt buộc** (D6) trở nên quan trọng hơn, không kém — với 4500 vùng thì xem trước rồi mới lưu là cách duy nhất biết ảnh đó có ra được hay không.
+
+### Hệ quả đã lường trước
+
+- **Điện thoại phải zoom nhiều.** Ở 4500 vùng, mỗi vùng chỉ vài chục pixel. Đã có zoom/pan và nhãn co giãn theo scale, cộng highlight-theo-màu cho vùng quá nhỏ để in nhãn — ba thứ này giờ là thiết yếu chứ không phải tiện nghi.
+- **Một tranh mất nhiều giờ.** Đúng như sách thật.
+- **Pipeline chậm hơn.** 2000px là gấp ~2× số pixel của 1400px, và bisection chạy lại Stage 3→4 tới 6 lần. Timeout 60s có thể phải nâng — phải đo, không đoán.
