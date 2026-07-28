@@ -22,6 +22,8 @@ const params = { ...DEFAULT_PARAMS, k: 3, minArea: 2 }
 function scriptedWorker(script: GenerateResponse[], delayed = false) {
   const w: WorkerLike & { terminate: ReturnType<typeof vi.fn<() => void>> } = {
     onmessage: null,
+    onerror: null,
+    onmessageerror: null,
     terminate: vi.fn(),
     postMessage: (m) => {
       if (delayed) return
@@ -142,6 +144,40 @@ describe('generateInWorker', () => {
       generateInWorker(image, params, { createWorker: create, signal: ac.signal }),
     ).rejects.toThrow(/huỷ/i)
     expect(create).not.toHaveBeenCalled()
+  })
+
+  it('I2: worker onerror (vd redeploy khiến chunk 404, worker chết trước khi gửi message nào) → reject NGAY, terminate, không đợi hết 60 giây', async () => {
+    const w = scriptedWorker([], true) // delayed: postMessage không tự gọi onmessage
+    const p = generateInWorker(image, params, { createWorker: () => w, timeoutMs: 60_000 })
+
+    // Trước khi sửa: WorkerLike không có onerror, generateInWorker không gắn
+    // gì vào worker.onerror thật — nó vẫn `null`, sự kiện error của Worker
+    // thật (chunk 404, OOM kill) rơi vào hư không, và người dùng phải đợi hết
+    // 60 giây để đọc "mất quá lâu... giảm kích thước ảnh" — sai và vô dụng.
+    w.onerror?.(new Event('error') as unknown as never)
+
+    await expect(p).rejects.toThrow(/sự cố|worker/i)
+    expect(w.terminate).toHaveBeenCalled()
+  })
+
+  it('I2: worker onerror sau khi đã thấy progress → thông báo nêu đúng stage cuối cùng', async () => {
+    const w = scriptedWorker(
+      [{ type: 'progress', requestId: 1, stage: 'tach-vung', ratio: 0.5 }],
+      false,
+    )
+    const p = generateInWorker(image, params, { createWorker: () => w })
+    w.onerror?.(new Event('error') as unknown as never)
+
+    await expect(p).rejects.toThrow(/tách vùng/i)
+  })
+
+  it('I2: worker onmessageerror (message không deserialize được) → reject, terminate', async () => {
+    const w = scriptedWorker([], true)
+    const p = generateInWorker(image, params, { createWorker: () => w })
+    w.onmessageerror?.(new Event('messageerror') as unknown as never)
+
+    await expect(p).rejects.toThrow(/sự cố|worker/i)
+    expect(w.terminate).toHaveBeenCalled()
   })
 
   it('bỏ qua message có requestId khác', async () => {

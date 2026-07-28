@@ -18,6 +18,16 @@ export interface WorkerLike {
   postMessage(m: unknown): void
   terminate(): void
   onmessage: ((e: { data: GenerateResponse }) => void) | null
+  /**
+   * Worker crash (chunk hashed 404 sau redeploy, OOM kill, lỗi cú pháp trong
+   * worker...) không bao giờ gọi `onmessage` — không gắn `onerror` thì sự
+   * kiện này rơi vào hư không và người dùng phải đợi hết 60 giây timeout để
+   * đọc "mất quá lâu... giảm kích thước ảnh", sai và vô dụng (spec §17 yêu
+   * cầu báo đúng stage khi worker gặp sự cố).
+   */
+  onerror: ((e: unknown) => void) | null
+  /** message nhận được nhưng không deserialize được — hiếm nhưng cùng một lớp lỗi với onerror */
+  onmessageerror: ((e: unknown) => void) | null
 }
 
 export function createGenerateWorker(): WorkerLike {
@@ -59,6 +69,10 @@ export function generateInWorker(
   return new Promise<GenerateOutcome>((resolve, reject) => {
     const requestId = nextRequestId++
     const worker = createWorker()
+    // Nhãn thông báo lỗi worker crash bằng stage progress GẦN NHẤT đã thấy —
+    // không có message 'error' riêng (worker chết im lặng) nên đây là manh
+    // mối duy nhất còn lại về việc nó đang làm gì.
+    let lastStage: PipelineStage | null = null
 
     let settled = false
     const finish = (fn: () => void): void => {
@@ -67,9 +81,24 @@ export function generateInWorker(
       clearTimeout(timer)
       signal?.removeEventListener('abort', onAbort)
       worker.onmessage = null
+      worker.onerror = null
+      worker.onmessageerror = null
       worker.terminate()
       fn()
     }
+
+    const onWorkerCrash = (): void => {
+      const where = lastStage ? `Lỗi ở bước "${STAGE_LABELS[lastStage]}": ` : ''
+      finish(() =>
+        reject(
+          new Error(
+            `${where}Worker sinh puzzle gặp sự cố (có thể do vừa triển khai lại ứng dụng, hoặc hết bộ nhớ). Hãy tải lại trang và thử lại.`,
+          ),
+        ),
+      )
+    }
+    worker.onerror = onWorkerCrash
+    worker.onmessageerror = onWorkerCrash
 
     const timer = setTimeout(() => {
       finish(() =>
@@ -91,6 +120,7 @@ export function generateInWorker(
       if (!r || r.requestId !== requestId) return
 
       if (r.type === 'progress') {
+        lastStage = r.stage
         onProgress?.(r.stage, r.ratio)
         return
       }
