@@ -136,6 +136,33 @@ describe('LibraryRoute', () => {
     expect(screen.getByRole('link', { name: /tô tranh/i }).getAttribute('href')).toBe('/play/a')
   })
 
+  it('I9: mở hộp thoại xác nhận xoá → focus tự động vào nút Xoá tranh', async () => {
+    await seed('a', 'Tranh', 100)
+    renderLibrary()
+    await waitFor(() => expect(screen.getByText('Tranh')).toBeTruthy())
+
+    await userEvent.click(screen.getByRole('button', { name: /xoá/i }))
+
+    await waitFor(() =>
+      expect(document.activeElement).toBe(screen.getByRole('button', { name: /^xoá tranh$/i })),
+    )
+  })
+
+  it('I9: Escape đóng hộp thoại xác nhận xoá mà KHÔNG xoá tranh', async () => {
+    await seed('a', 'Tranh', 100)
+    renderLibrary()
+    await waitFor(() => expect(screen.getByText('Tranh')).toBeTruthy())
+
+    await userEvent.click(screen.getByRole('button', { name: /xoá/i }))
+    await waitFor(() => expect(screen.getByRole('dialog', { name: /xác nhận xoá/i })).toBeTruthy())
+
+    await userEvent.keyboard('{Escape}')
+
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: /xác nhận xoá/i })).toBeNull())
+    expect(screen.getByText('Tranh')).toBeTruthy()
+    expect(await listPuzzles()).toHaveLength(1)
+  })
+
   it('xoá cần xác nhận, rồi card biến mất', async () => {
     await seed('a', 'Tranh', 100)
     renderLibrary()

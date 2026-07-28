@@ -6,6 +6,7 @@ import { listPuzzles, loadOriginal, loadPuzzle, saveThumbnail } from '@/data/loc
 import { CompletionBanner } from '@/ui/components/completion-banner'
 import { PaintCanvas } from '@/ui/components/paint-canvas'
 import { PaletteBar } from '@/ui/components/palette-bar'
+import { useDialogFocus } from '@/ui/dialog-focus'
 import { usePaint } from '@/ui/hooks/use-paint'
 import { makeThumbnail } from '@/ui/make-thumbnail'
 
@@ -275,30 +276,50 @@ function PlayScreen({ puzzleId, puzzle, title }: { puzzleId: string; puzzle: Puz
       )}
 
       {askReset && (
-        <div role="dialog" aria-modal="true" aria-label="Xác nhận tô lại" style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,.6)', display: 'grid', placeItems: 'center', zIndex: 20 }}>
-          <div style={{ background: '#fff', padding: 20, borderRadius: 12 }}>
-            <p>Xoá toàn bộ tiến độ của tranh này?</p>
-            <button
-              type="button"
-              onClick={() => {
-                paint.reset()
-                setResetCount((c) => c + 1)
-                setAskReset(false)
-                setShowDone(false)
-              }}
-            >
-              Xoá tiến độ
-            </button>{' '}
-            <button type="button" onClick={() => setAskReset(false)}>
-              Huỷ
-            </button>
-          </div>
-        </div>
+        <ResetConfirmDialog
+          onConfirm={() => {
+            paint.reset()
+            setResetCount((c) => c + 1)
+            setAskReset(false)
+            setShowDone(false)
+          }}
+          onCancel={() => setAskReset(false)}
+        />
       )}
 
       {showDone && paint.isComplete && (
         <CompletionBanner originalUrl={originalUrl} onClose={() => setShowDone(false)} />
       )}
     </main>
+  )
+}
+
+/**
+ * Tách riêng khỏi PlayScreen vì `useDialogFocus` phải được gọi vô điều kiện
+ * trong thân MỘT component — component này chỉ tồn tại (mount) khi `askReset`
+ * true, nên gọi hook ở đây luôn tuân thủ rules of hooks dù bản thân dialog
+ * được render có điều kiện ở component cha (I9).
+ */
+function ResetConfirmDialog({
+  onConfirm,
+  onCancel,
+}: {
+  onConfirm: () => void
+  onCancel: () => void
+}) {
+  // Escape = huỷ (không xác nhận xoá) — giống hành vi "Huỷ", không phải "Xoá tiến độ"
+  const confirmRef = useDialogFocus<HTMLButtonElement>(onCancel)
+  return (
+    <div role="dialog" aria-modal="true" aria-label="Xác nhận tô lại" style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,.6)', display: 'grid', placeItems: 'center', zIndex: 20 }}>
+      <div style={{ background: '#fff', padding: 20, borderRadius: 12 }}>
+        <p>Xoá toàn bộ tiến độ của tranh này?</p>
+        <button ref={confirmRef} type="button" onClick={onConfirm}>
+          Xoá tiến độ
+        </button>{' '}
+        <button type="button" onClick={onCancel}>
+          Huỷ
+        </button>
+      </div>
+    </div>
   )
 }

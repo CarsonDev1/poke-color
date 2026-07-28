@@ -314,6 +314,37 @@ describe('PlayRoute', () => {
     )
   })
 
+  it('I9: mở hộp thoại xác nhận reset → focus tự động vào nút Xoá tiến độ', async () => {
+    renderPlay()
+    await waitFor(() => expect(screen.getByText('Tranh thử')).toBeTruthy())
+
+    await userEvent.click(screen.getByRole('button', { name: /tô lại từ đầu/i }))
+
+    await waitFor(() =>
+      expect(document.activeElement).toBe(screen.getByRole('button', { name: /^xoá tiến độ$/i })),
+    )
+  })
+
+  it('I9: Escape đóng hộp thoại xác nhận reset mà KHÔNG xoá tiến độ', async () => {
+    renderPlay()
+    await waitFor(() => expect(screen.getByText('Tranh thử')).toBeTruthy())
+
+    await userEvent.click(screen.getByRole('radio', { name: /màu 1/i }))
+    const surface = screen.getByRole('application', { name: /tranh tô màu/i })
+    surface.focus()
+    await userEvent.keyboard('{Enter}')
+    await waitFor(() => expect(screen.getByText(/1\s*\/\s*4/)).toBeTruthy())
+
+    await userEvent.click(screen.getByRole('button', { name: /tô lại từ đầu/i }))
+    await waitFor(() => expect(screen.getByRole('dialog', { name: /xác nhận tô lại/i })).toBeTruthy())
+
+    await userEvent.keyboard('{Escape}')
+
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: /xác nhận tô lại/i })).toBeNull())
+    // tiến độ vẫn còn nguyên — Escape chỉ huỷ hộp thoại, không xác nhận xoá
+    expect(screen.getByText(/1\s*\/\s*4/)).toBeTruthy()
+  })
+
   it('id không tồn tại → hiện lỗi, không crash', async () => {
     render(
       <MemoryRouter initialEntries={['/play/khong-co']}>

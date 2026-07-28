@@ -7,6 +7,7 @@ import {
   loadThumbnail,
   type PuzzleRecord,
 } from '@/data/local-cache'
+import { useDialogFocus } from '@/ui/dialog-focus'
 
 interface Card {
   rec: PuzzleRecord
@@ -169,18 +170,41 @@ export default function LibraryRoute() {
       )}
 
       {askDelete && (
-        <div role="dialog" aria-modal="true" aria-label="Xác nhận xoá" style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,.6)', display: 'grid', placeItems: 'center' }}>
-          <div style={{ background: '#fff', padding: 20, borderRadius: 12 }}>
-            <p>Xoá tranh này cùng toàn bộ tiến độ?</p>
-            <button type="button" onClick={() => void remove(askDelete)}>
-              Xoá tranh
-            </button>{' '}
-            <button type="button" onClick={() => setAskDelete(null)}>
-              Huỷ
-            </button>
-          </div>
-        </div>
+        <DeleteConfirmDialog
+          onConfirm={() => void remove(askDelete)}
+          onCancel={() => setAskDelete(null)}
+        />
       )}
     </main>
+  )
+}
+
+/**
+ * Tách riêng khỏi LibraryRoute vì `useDialogFocus` phải gọi vô điều kiện
+ * trong thân MỘT component — component này chỉ tồn tại khi `askDelete` khác
+ * null, nên gọi hook ở đây vẫn tuân thủ rules of hooks dù dialog được render
+ * có điều kiện ở component cha (I9).
+ */
+function DeleteConfirmDialog({
+  onConfirm,
+  onCancel,
+}: {
+  onConfirm: () => void
+  onCancel: () => void
+}) {
+  // Escape = huỷ (không xác nhận xoá) — giống hành vi "Huỷ", không phải "Xoá tranh"
+  const confirmRef = useDialogFocus<HTMLButtonElement>(onCancel)
+  return (
+    <div role="dialog" aria-modal="true" aria-label="Xác nhận xoá" style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,.6)', display: 'grid', placeItems: 'center' }}>
+      <div style={{ background: '#fff', padding: 20, borderRadius: 12 }}>
+        <p>Xoá tranh này cùng toàn bộ tiến độ?</p>
+        <button ref={confirmRef} type="button" onClick={onConfirm}>
+          Xoá tranh
+        </button>{' '}
+        <button type="button" onClick={onCancel}>
+          Huỷ
+        </button>
+      </div>
+    </div>
   )
 }

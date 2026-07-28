@@ -1,3 +1,5 @@
+import { useDialogFocus } from '@/ui/dialog-focus'
+
 export function CompletionBanner({
   originalUrl,
   onClose,
@@ -5,6 +7,13 @@ export function CompletionBanner({
   originalUrl: string | null
   onClose: () => void
 }) {
+  // I9: aria-modal="true" giới hạn buffer đọc của NVDA/JAWS vào subtree này —
+  // nếu focus đứng ngoài (hành vi mặc định khi mount một node mới), nội dung
+  // hoàn toàn không đọc được. Banner này là ca rõ nhất: nó tự xuất hiện khi
+  // vùng cuối cùng được tô xong, không do người dùng chủ động bấm gì, nên
+  // không có tín hiệu nào khác báo cho AT biết có nội dung mới.
+  const closeRef = useDialogFocus<HTMLButtonElement>(onClose)
+
   return (
     <div
       role="dialog"
@@ -33,7 +42,7 @@ export function CompletionBanner({
             />
           </div>
         )}
-        <button type="button" onClick={onClose} style={{ marginTop: 16 }}>
+        <button ref={closeRef} type="button" onClick={onClose} style={{ marginTop: 16 }}>
           Đóng
         </button>
       </div>
