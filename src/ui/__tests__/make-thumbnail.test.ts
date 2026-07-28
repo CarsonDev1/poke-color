@@ -13,6 +13,19 @@ function puzzle(w: number, h: number): Puzzle {
   return assemblePuzzle({ width: w, height: h, palette, regionCount: 1, regionMap }, regions)
 }
 
+// ctx dùng chung cho MỌI OffscreenCanvas được tạo ra (canvas đầy đủ lẫn canvas
+// thumbnail thu nhỏ) — cần để đếm được tổng số lần drawImage across cả hai,
+// phân biệt "chỉ composite xuống thumbnail" (1 lần, code cũ) với "vẽ viền rồi
+// mới composite" (2 lần, sau khi sửa I-thumbnail-outline).
+const ctx = {
+  fillStyle: '',
+  fillRect: vi.fn(),
+  drawImage: vi.fn(),
+  clearRect: vi.fn(),
+  setTransform: vi.fn(),
+  scale: vi.fn(),
+}
+
 beforeAll(() => {
   Object.assign(globalThis, {
     // `erasableSyntaxOnly` cấm cú pháp constructor parameter-property (public
@@ -25,17 +38,22 @@ beforeAll(() => {
         this.height = height
       }
       getContext() {
-        return {
-          fillStyle: '',
-          fillRect: vi.fn(),
-          drawImage: vi.fn(),
-          clearRect: vi.fn(),
-          setTransform: vi.fn(),
-          scale: vi.fn(),
-        }
+        return ctx
       }
       convertToBlob() {
         return Promise.resolve(new Blob([new Uint8Array([1])], { type: 'image/webp' }))
+      }
+    },
+    createImageBitmap: vi.fn(async () => ({ close: vi.fn() })),
+    // `erasableSyntaxOnly` cấm cú pháp constructor parameter-property.
+    ImageData: class {
+      data: Uint8ClampedArray
+      width: number
+      height: number
+      constructor(data: Uint8ClampedArray, width: number, height: number) {
+        this.data = data
+        this.width = width
+        this.height = height
       }
     },
   })
@@ -62,5 +80,18 @@ describe('makeThumbnail', () => {
     const p = puzzle(40, 20)
     const blob = await makeThumbnail(p, new PaintEngine(p.regions))
     expect(blob.type).toBe('image/webp')
+  })
+
+  it('vẽ viền vùng lên thumbnail, không chỉ paintAllRegions — thiếu viền thì một puzzle CHƯA tô gì render ra hình chữ nhật trắng ngà đồng nhất, không phân biệt được với placeholder "Chưa tô" của /library', async () => {
+    const p = puzzle(40, 20)
+    vi.mocked(createImageBitmap).mockClear()
+    ctx.drawImage.mockClear()
+
+    await makeThumbnail(p, new PaintEngine(p.regions))
+
+    expect(createImageBitmap).toHaveBeenCalledTimes(1)
+    // 2 lần drawImage: 1 để vẽ bitmap viền lên canvas đầy đủ, 1 để composite
+    // (thu nhỏ) canvas đó vào canvas thumbnail cuối cùng
+    expect(ctx.drawImage).toHaveBeenCalledTimes(2)
   })
 })

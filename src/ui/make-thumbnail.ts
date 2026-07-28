@@ -1,6 +1,6 @@
 import type { PaintEngine } from '@/core/engine/paint-engine'
 import type { Puzzle } from '@/core/types'
-import { paintAllRegions } from '@/render/layers'
+import { buildOutlineImageData, paintAllRegions } from '@/render/layers'
 
 export const THUMBNAIL_MAX_PX = 320
 
@@ -23,6 +23,15 @@ export async function makeThumbnail(puzzle: Puzzle, engine: PaintEngine): Promis
   const fctx = full.getContext('2d')
   if (!fctx) throw new Error('Không tạo được canvas cho thumbnail')
   paintAllRegions(fctx as unknown as CanvasRenderingContext2D, puzzle, engine)
+
+  // Viền vùng — giống `redrawAll` trong PaintCanvas. Thiếu bước này, một
+  // puzzle CHƯA tô gì render ra một hình chữ nhật UNFILLED_COLOR đồng nhất,
+  // không phân biệt được với placeholder "Chưa tô" của /library — tức mọi
+  // puzzle mới đều trông "trống" trên chính màn hình chủ của app cho tới khi
+  // người dùng đã tô kha khá.
+  const outlineBmp = await createImageBitmap(buildOutlineImageData(puzzle))
+  ;(fctx as unknown as CanvasRenderingContext2D).drawImage(outlineBmp as unknown as CanvasImageSource, 0, 0)
+  outlineBmp.close()
 
   const { w, h } = thumbnailSize(puzzle.width, puzzle.height)
   const small = new OffscreenCanvas(w, h)
