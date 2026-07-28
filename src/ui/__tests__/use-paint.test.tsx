@@ -156,21 +156,46 @@ describe('usePaint', () => {
     expect(saved?.filledCount).toBe(1)
   })
 
-  it('tự lưu sau debounce', async () => {
+  it('I12: tô một vùng → lưu IndexedDB NGAY, không phải chờ debounce (debounce chỉ dành cho đẩy Supabase ở Plan 2, không phải ghi cục bộ — spec §8)', async () => {
+    const p = puzzle()
+    const { result } = renderHook(() => usePaint('p1', p, silentSound()))
+    act(() => result.current.selectColor(0))
+    act(() => result.current.paint(0))
+
+    // KHÔNG advance timer nào, KHÔNG gọi flush() — nếu ghi cục bộ còn bị
+    // debounce 1.5s che chắn, waitFor mặc định (1000ms) sẽ timeout trước khi
+    // bản ghi xuất hiện.
+    await waitFor(async () => {
+      expect((await loadProgress('p1'))?.filledCount).toBe(1)
+    })
+  })
+
+  it('I12: sự kiện pagehide flush tiến độ — đóng tab không unmount nên effect dọn dẹp không chạy', async () => {
     vi.useFakeTimers()
     const p = puzzle()
     const { result } = renderHook(() => usePaint('p1', p, silentSound()))
     act(() => result.current.selectColor(0))
     act(() => result.current.paint(0))
 
+    // Đúng 1000ms — đủ để `activeSeconds` tăng một tick (setInterval mốc
+    // 1000ms), nhưng KHÔNG advance thêm gì nữa: test này cô lập vai trò của
+    // listener `pagehide`, không phải hiệu ứng phụ của ghi tức thì ở trên.
     await act(async () => {
-      await vi.advanceTimersByTimeAsync(1600)
+      await vi.advanceTimersByTimeAsync(1000)
+    })
+
+    act(() => {
+      window.dispatchEvent(new Event('pagehide'))
+    })
+    await act(async () => {
+      await Promise.resolve()
+      await Promise.resolve()
     })
     vi.useRealTimers()
 
-    await waitFor(async () => {
-      expect((await loadProgress('p1'))?.filledCount).toBe(1)
-    })
+    const saved = await loadProgress('p1')
+    expect(saved?.filledCount).toBe(1)
+    expect(saved?.activeSeconds).toBeGreaterThanOrEqual(1)
   })
 
   it('nạp lại tiến độ đã lưu khi mount lại', async () => {
@@ -189,22 +214,17 @@ describe('usePaint', () => {
     })
   })
 
-  it('I3: lưu tiến độ thất bại (IndexedDB từ chối ghi) → saveError được set, flush KHÔNG throw', async () => {
+  it('I3: lưu tiến độ thất bại (IndexedDB từ chối ghi) → saveError được set, không throw', async () => {
     const p = puzzle()
     vi.mocked(saveProgress).mockRejectedValueOnce(new Error('QuotaExceededError'))
     const { result } = renderHook(() => usePaint('p1', p, silentSound()))
     act(() => result.current.selectColor(0))
+    // Từ I12: `paint()` tự gọi `save()` NGAY (fire-and-forget), không còn
+    // cần `flush()` tường minh để kích hoạt lượt ghi — `waitFor` đợi
+    // microtask bên trong `save()` chạy xong.
     act(() => result.current.paint(0))
 
-    // Nếu save() không tự bắt lỗi, `flush()` (await save()) sẽ reject và
-    // `act(async () => await result.current.flush())` ném ra ngoài — hỏng cả
-    // test thay vì cho ta assert saveError. Bản thân việc await không throw ở
-    // đây đã là một phần của assertion.
-    await act(async () => {
-      await result.current.flush()
-    })
-
-    expect(result.current.saveError).toMatch(/không lưu được tiến độ/i)
+    await waitFor(() => expect(result.current.saveError).toMatch(/không lưu được tiến độ/i))
   })
 
   it('I3: lưu thành công sau một lần lỗi → saveError được xoá', async () => {
@@ -213,16 +233,11 @@ describe('usePaint', () => {
     const { result } = renderHook(() => usePaint('p1', p, silentSound()))
     act(() => result.current.selectColor(0))
     act(() => result.current.paint(0))
-    await act(async () => {
-      await result.current.flush()
-    })
-    expect(result.current.saveError).not.toBeNull()
+    await waitFor(() => expect(result.current.saveError).not.toBeNull())
 
+    // Lượt tô kế tiếp tự gọi save() lại — lần này không bị mock từ chối nữa.
     act(() => result.current.paint(1))
-    await act(async () => {
-      await result.current.flush()
-    })
-    expect(result.current.saveError).toBeNull()
+    await waitFor(() => expect(result.current.saveError).toBeNull())
   })
 
   it('completedAt được ghi khi hoàn thành', async () => {

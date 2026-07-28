@@ -349,9 +349,18 @@ describe('PlayRoute', () => {
     await waitFor(async () => expect((await loadProgress('p1'))?.filledCount).toBe(1))
   })
 
-  // Test I3 (lưu thất bại → hiện `paint.saveError`) nằm ở cuối file, cạnh
-  // test I12 — sau khi I12 bỏ debounce khỏi đường ghi cục bộ, save() chạy
-  // ngay khi tô (không cần giả lập bộ đếm giờ để chờ debounce 1.5s).
+  it('I3 + I12: lưu tiến độ thất bại → hiện thông báo lỗi hành động được ngay (không cần chờ debounce, đã bỏ ở I12)', async () => {
+    vi.mocked(saveProgress).mockRejectedValueOnce(new Error('QuotaExceededError'))
+    renderPlay()
+    await waitFor(() => expect(screen.getByText('Tranh thử')).toBeTruthy())
+
+    await userEvent.click(screen.getByRole('radio', { name: /màu 1/i }))
+    const surface = screen.getByRole('application', { name: /tranh tô màu/i })
+    surface.focus()
+    await userEvent.keyboard('{Enter}')
+
+    await waitFor(() => expect(screen.getByRole('alert').textContent).toMatch(/không lưu được tiến độ/i))
+  })
 
   it('C1: phục hồi tiến độ đã lưu → layer base vẽ đúng màu palette, không phải màu chưa tô', async () => {
     // vùng 0 (colorIndex 0, đỏ) đã tô từ trước — mô phỏng "vào lại /play sau

@@ -4,8 +4,6 @@ import { PaintEngine, type PaintResult } from '@/core/engine/paint-engine'
 import type { Puzzle } from '@/core/types'
 import { loadProgress, saveProgress } from '@/data/local-cache'
 
-export const AUTOSAVE_DEBOUNCE_MS = 1500
-
 export interface PaintState {
   engine: PaintEngine
   selectedColor: number | null
@@ -60,16 +58,22 @@ export function usePaint(
   const [announcement, setAnnouncement] = useState('')
   const [saveError, setSaveError] = useState<string | null>(null)
   const activeSeconds = useRef(0)
-  const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const bump = useCallback(() => setTick((t) => t + 1), [])
 
-  // `save` PHẢI tự bắt lỗi: nó được gọi cả từ `scheduleSave` (fire-and-forget
-  // qua setTimeout, không ai await) lẫn từ `flush` (await trực tiếp, kể cả
-  // trong effect dọn dẹp lúc unmount ở `/play`). Một rejection không bắt ở
-  // nhánh đầu là unhandled rejection âm thầm (I3) — cả giờ tô mất sạch không
-  // một dấu hiệu nào; ở nhánh sau nó làm hỏng effect unmount. Bắt tại đây một
-  // lần là đủ cho cả hai đường gọi.
+  // `save` PHẢI tự bắt lỗi: nó được gọi fire-and-forget từ `paint`/`reset`
+  // lẫn được await trực tiếp từ `flush` (kể cả trong effect dọn dẹp lúc
+  // unmount ở `/play`, và từ listener `pagehide` bên dưới). Một rejection
+  // không bắt ở nhánh đầu là unhandled rejection âm thầm (I3) — cả giờ tô
+  // mất sạch không một dấu hiệu nào; ở nhánh sau nó làm hỏng effect unmount.
+  // Bắt tại đây một lần là đủ cho mọi đường gọi.
+  //
+  // Ghi NGAY, không debounce (I12): spec §8 "Autosave: ghi IndexedDB ngay
+  // lập tức; debounce 1.5s đẩy Supabase" — debounce thuộc về đường đẩy
+  // Supabase của Plan 2 (chưa xây), KHÔNG phải ghi cục bộ này. Bản ghi chỉ
+  // ~100 byte (một bitset + vài số), nên ghi mỗi lần tô — kể cả kéo-tô qua
+  // hàng chục vùng liên tiếp — không đáng kể so với việc mất nguyên một lượt
+  // tô khi debounce chưa kịp chạy lúc đóng tab (không có unmount nào xảy ra).
   const save = useCallback(async () => {
     const complete = engine.isComplete()
     try {
@@ -87,18 +91,22 @@ export function usePaint(
     }
   }, [engine, puzzleId])
 
-  const scheduleSave = useCallback(() => {
-    if (timer.current) clearTimeout(timer.current)
-    timer.current = setTimeout(() => void save(), AUTOSAVE_DEBOUNCE_MS)
-  }, [save])
-
+  /** Dùng khi cần đợi ghi xong xuôi (unmount, pagehide) — bản thân `save` đã ghi ngay, đây chỉ là alias tường minh cho ý "chờ lượt ghi cuối cùng hoàn tất". */
   const flush = useCallback(async () => {
-    if (timer.current) {
-      clearTimeout(timer.current)
-      timer.current = null
-    }
     await save()
   }, [save])
+
+  // Đóng tab KHÔNG unmount component (không effect cleanup nào chạy) —
+  // `pagehide` là tín hiệu duy nhất còn lại để flush tiến độ + activeSeconds
+  // tích luỹ từ lần ghi gần nhất. Không dùng `beforeunload`/`unload`: cả hai
+  // đều chặn bfcache (Chrome/Firefox không cache lại trang cho nút Back).
+  useEffect(() => {
+    const onPageHide = (): void => {
+      void flush()
+    }
+    window.addEventListener('pagehide', onPageHide)
+    return () => window.removeEventListener('pagehide', onPageHide)
+  }, [flush])
 
   // nạp tiến độ đã lưu
   useEffect(() => {
@@ -127,12 +135,6 @@ export function usePaint(
       if (document.visibilityState === 'visible') activeSeconds.current += 1
     }, 1000)
     return () => clearInterval(id)
-  }, [])
-
-  useEffect(() => {
-    return () => {
-      if (timer.current) clearTimeout(timer.current)
-    }
   }, [])
 
   // `tick` không được đọc trong thân hàm nhưng PHẢI có trong dependency list:
@@ -179,10 +181,10 @@ export function usePaint(
           : `Đã tô một vùng, còn ${engine.regionCount - engine.filledCount} vùng`,
       )
       bump()
-      scheduleSave()
+      void save()
       return r
     },
-    [selectedColor, engine, colorCount, sound, bump, scheduleSave],
+    [selectedColor, engine, colorCount, sound, bump, save],
   )
 
   const reset = useCallback(() => {
@@ -190,8 +192,8 @@ export function usePaint(
     setSelectedColor(null)
     setAnnouncement('Đã xoá toàn bộ tiến độ')
     bump()
-    scheduleSave()
-  }, [engine, bump, scheduleSave])
+    void save()
+  }, [engine, bump, save])
 
   return {
     engine,
