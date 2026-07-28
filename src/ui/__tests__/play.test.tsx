@@ -24,6 +24,7 @@ vi.mock('@/data/local-cache', async (importOriginal) => {
   return { ...actual, saveProgress: vi.fn(actual.saveProgress) }
 })
 import { DEFAULT_PARAMS, type RegionMeta, type Rgb } from '@/core/types'
+import { SoundBoard } from '@/audio/synth'
 import PlayRoute from '@/routes/play'
 
 const palette: Rgb[] = [
@@ -115,6 +116,10 @@ beforeAll(() => {
       currentTime = 0
       destination = {}
       resume() {
+        return Promise.resolve()
+      }
+      close() {
+        this.state = 'closed'
         return Promise.resolve()
       }
       createOscillator() {
@@ -318,6 +323,17 @@ describe('PlayRoute', () => {
     await userEvent.keyboard('{ArrowLeft}{Enter}{ArrowRight}{ArrowRight}{Enter}')
 
     await waitFor(() => expect(screen.getByRole('dialog', { name: /hoàn thành/i })).toBeTruthy())
+  })
+
+  it('I5: đóng AudioContext khi rời màn chơi (unmount) — tránh chạm trần 6 context/trang của Chrome', async () => {
+    const closeSpy = vi.spyOn(SoundBoard.prototype, 'close')
+    const { unmount } = renderPlay()
+    await waitFor(() => expect(screen.getByText('Tranh thử')).toBeTruthy())
+
+    unmount()
+
+    expect(closeSpy).toHaveBeenCalledTimes(1)
+    closeSpy.mockRestore()
   })
 
   it('lưu tiến độ khi unmount', async () => {

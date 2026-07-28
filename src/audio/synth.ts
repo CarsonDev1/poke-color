@@ -45,6 +45,24 @@ export class SoundBoard {
     if (ctx && ctx.state === 'suspended') void ctx.resume()
   }
 
+  /**
+   * Đóng AudioContext hiện tại (nếu có) và xoá tham chiếu.
+   *
+   * Bắt buộc gọi khi rời màn chơi: SPA hash-router không reload trang giữa
+   * các puzzle, và Chrome giới hạn 6 AudioContext phần cứng mỗi trang —
+   * không đóng thì `PlayScreen` thứ 7 trong cùng phiên (thư viện → chơi →
+   * quay lại, lặp lại) làm `ensure()` ném `NotSupportedError`, bị `catch` nuốt
+   * và cài `failed = true` VĨNH VIỄN cho `SoundBoard` đó — puzzle từ đó về
+   * sau câm lặng, không một dấu hiệu nào. An toàn khi gọi lúc chưa từng
+   * `unlock()` (chưa có context) hoặc gọi nhiều lần.
+   */
+  close(): void {
+    if (!this.ctx) return
+    const ctx = this.ctx
+    this.ctx = null
+    void ctx.close()
+  }
+
   private ensure(): AudioContext | null {
     if (this.ctx || this.failed) return this.ctx
     try {

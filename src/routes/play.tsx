@@ -73,6 +73,17 @@ function PlayScreen({ puzzleId, puzzle, title }: { puzzleId: string; puzzle: Puz
   // state `originalUrl`. Xem effect giải phóng bên dưới để hiểu vì sao.
   const originalUrlRef = useRef<string | null>(null)
 
+  // Đóng AudioContext khi rời màn chơi (I5). App là SPA hash-router, không
+  // reload trang giữa các puzzle — thư viện → chơi → quay lại lặp lại nhiều
+  // lần trong CÙNG một tab tạo ra một `SoundBoard` (và một AudioContext) MỚI
+  // mỗi lần mount `PlayScreen`. Chrome giới hạn 6 AudioContext phần cứng mỗi
+  // trang; không đóng thì cái thứ 7 làm `ensure()` bên trong SoundBoard ném
+  // NotSupportedError, bị catch nuốt và cài `failed = true` vĩnh viễn — puzzle
+  // đó về sau câm lặng suốt phần còn lại của phiên, không một dấu hiệu.
+  useEffect(() => {
+    return () => sound.close()
+  }, [sound])
+
   // ảnh gốc chỉ tải khi thực sự cần (bấm xem, hoặc hoàn thành).
   // Gate trên `originalUrlRef` (không phải state `originalUrl`), và
   // `originalUrl` KHÔNG nằm trong dependency: nếu để state đó trong deps,

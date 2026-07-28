@@ -19,6 +19,10 @@ function fakeContextFactory() {
       ctx.state = 'running'
       return Promise.resolve()
     }),
+    close: vi.fn(() => {
+      ctx.state = 'closed'
+      return Promise.resolve()
+    }),
     createOscillator: vi.fn((): FakeOsc => {
       const o: FakeOsc = {
         type: '',
@@ -134,6 +138,44 @@ describe('SoundBoard', () => {
     new SoundBoard(factory).setMuted(true)
     expect(localStorage.getItem(MUTE_STORAGE_KEY)).toBe('1')
     expect(new SoundBoard(factory).muted).toBe(true)
+  })
+
+  it('I5: close() đóng AudioContext hiện tại', () => {
+    const { factory, ctx } = fakeContextFactory()
+    const sb = new SoundBoard(factory)
+    sb.unlock()
+
+    sb.close()
+
+    expect(ctx.close).toHaveBeenCalledTimes(1)
+  })
+
+  it('I5: sau close(), unlock() tạo một AudioContext MỚI (không tái dùng context đã đóng)', () => {
+    const created: ReturnType<typeof fakeContextFactory>['ctx'][] = []
+    const factory = () => {
+      const { ctx } = fakeContextFactory()
+      created.push(ctx)
+      return ctx as unknown as AudioContext
+    }
+    const sb = new SoundBoard(factory)
+
+    sb.unlock()
+    expect(created).toHaveLength(1)
+
+    sb.close()
+    // Chrome giới hạn 6 AudioContext phần cứng mỗi trang; vì đây là SPA
+    // hash-router không reload giữa các puzzle, `close()` PHẢI giải phóng
+    // context cũ để lần `unlock()` kế tiếp (mở puzzle tiếp theo) tạo được
+    // context mới thay vì tái dùng — hoặc tệ hơn, không làm gì — context đã
+    // đóng.
+    sb.unlock()
+    expect(created).toHaveLength(2)
+    expect(created[1].resume).toHaveBeenCalled()
+  })
+
+  it('I5: close() khi chưa từng unlock() không throw', () => {
+    const sb = new SoundBoard(fakeContextFactory().factory)
+    expect(() => sb.close()).not.toThrow()
   })
 
   it('lỗi khi tạo AudioContext không làm app chết', () => {
