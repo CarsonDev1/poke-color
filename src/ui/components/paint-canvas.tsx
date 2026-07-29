@@ -19,6 +19,8 @@ export function PaintCanvas({
   width,
   height,
   revision,
+  tool = 'paint',
+  onScaleChange,
 }: {
   puzzle: Puzzle
   engine: PaintEngine
@@ -50,6 +52,16 @@ export function PaintCanvas({
    * đổi ở MỌI lần tô, sẽ kéo `redrawAll` (O(toàn bộ vùng)) chạy lại mỗi cú tô.
    */
   revision: number
+  /**
+   * Công cụ đang chọn. `'pan'` cho phép kéo bằng MỘT ngón/một cú kéo chuột.
+   *
+   * Trước đây pan chỉ có ở chuột giữa hoặc giữ Space — trên màn hình cảm ứng
+   * không có cả hai, nên zoom vào rồi là KHÔNG THỂ di chuyển tranh. Đó là lỗi
+   * chặn hẳn việc dùng trên điện thoại/tablet.
+   */
+  tool?: 'paint' | 'pan'
+  /** báo lên cha khi người dùng pinch/zoom, để hiện mức zoom */
+  onScaleChange?: (scale: number) => void
 }) {
   const baseRef = useRef<HTMLCanvasElement>(null)
   const overlayRef = useRef<HTMLCanvasElement>(null)
@@ -65,11 +77,21 @@ export function PaintCanvas({
   // người dùng chuột/chạm chưa từng Tab vào canvas không nên thấy viền con
   // trỏ bàn phím ngay khi canvas xuất hiện (focusRegion mặc định là 0).
   const [hasFocus, setHasFocus] = useState(false)
-  const dragMode = useRef<'none' | 'paint' | 'pan'>('none')
+  const dragMode = useRef<'none' | 'paint' | 'pan' | 'pinch'>('none')
   const lastRegion = useRef<number | null>(null)
   const lastPoint = useRef<{ x: number; y: number } | null>(null)
   const spaceHeld = useRef(false)
   const firstPointerDone = useRef(false)
+  /**
+   * Mọi ngón/con trỏ đang chạm, theo pointerId.
+   *
+   * Cần theo dõi TẤT CẢ để nhận ra cử chỉ hai ngón: một ngón là tô, hai ngón là
+   * kéo + pinch zoom. Đây là cách chuẩn trên cảm ứng và là thứ người dùng thử
+   * đầu tiên khi muốn di chuyển tranh.
+   */
+  const pointers = useRef(new Map<number, { x: number; y: number }>())
+  /** khoảng cách giữa hai ngón ở frame trước, để tính hệ số pinch */
+  const lastPinchDist = useRef(0)
 
   const redrawAll = useCallback(() => {
     const ctx = baseRef.current?.getContext('2d')
@@ -165,6 +187,18 @@ export function PaintCanvas({
     }
   }
 
+  /** tâm và khoảng cách của hai ngón đầu tiên */
+  const pinchInfo = (): { cx: number; cy: number; dist: number } | null => {
+    const pts = [...pointers.current.values()]
+    if (pts.length < 2) return null
+    const [a, b] = pts
+    return {
+      cx: (a.x + b.x) / 2,
+      cy: (a.y + b.y) / 2,
+      dist: Math.hypot(b.x - a.x, b.y - a.y),
+    }
+  }
+
   const onPointerDown = (e: PointerEvent<HTMLDivElement>): void => {
     if (!firstPointerDone.current) {
       firstPointerDone.current = true
@@ -174,12 +208,21 @@ export function PaintCanvas({
     e.currentTarget.setPointerCapture(e.pointerId)
 
     const p = localPoint(e)
+    pointers.current.set(e.pointerId, p)
     lastPoint.current = p
 
-    // chuột giữa hoặc giữ Space ⇒ pan; còn lại ⇒ tô.
-    // Tách rõ hai chế độ, nếu không thì mỗi lần muốn di chuyển tranh sẽ tô
-    // nhầm cả một vệt.
-    if (e.button === 1 || spaceHeld.current) {
+    // Ngón thứ HAI chạm xuống ⇒ chuyển sang pinch, và HOÀN TÁC ý định tô: người
+    // dùng đặt hai ngón để phóng/kéo, không phải để tô. Không có nhánh này thì
+    // ngón đầu đã kích hoạt `paint` và họ tô nhầm một vệt mỗi lần muốn zoom.
+    if (pointers.current.size >= 2) {
+      dragMode.current = 'pinch'
+      lastRegion.current = null
+      lastPinchDist.current = pinchInfo()?.dist ?? 0
+      return
+    }
+
+    // Một con trỏ: chuột giữa, giữ Space, hoặc đang ở công cụ Kéo ⇒ pan.
+    if (e.button === 1 || spaceHeld.current || tool === 'pan') {
       dragMode.current = 'pan'
       return
     }
@@ -190,6 +233,28 @@ export function PaintCanvas({
 
   const onPointerMove = (e: PointerEvent<HTMLDivElement>): void => {
     const p = localPoint(e)
+    const prev = pointers.current.get(e.pointerId)
+    pointers.current.set(e.pointerId, p)
+
+    if (dragMode.current === 'pinch') {
+      const info = pinchInfo()
+      if (info && lastPinchDist.current > 0) {
+        // zoom quanh TÂM hai ngón, không phải tâm khung: đó là điều khiến pinch
+        // có cảm giác đúng — chỗ đang giữ thì đứng yên dưới ngón tay
+        const factor = info.dist / lastPinchDist.current
+        let next = zoomAbout(view, info.cx, info.cy, factor, MIN_SCALE, MAX_SCALE)
+        // hai ngón dịch đi ⇒ kéo tranh theo
+        if (prev) {
+          next = panBy(next, (p.x - prev.x) / 2, (p.y - prev.y) / 2)
+        }
+        setView(clampPan(next, puzzle.width, puzzle.height, width, height))
+        lastPinchDist.current = info.dist
+        onScaleChange?.(next.scale)
+      }
+      lastPoint.current = p
+      return
+    }
+
     if (dragMode.current === 'paint') {
       tryPaintAt(p.x, p.y)
     } else if (dragMode.current === 'pan' && lastPoint.current) {
@@ -199,10 +264,22 @@ export function PaintCanvas({
     lastPoint.current = p
   }
 
-  const endDrag = (): void => {
+  const endDrag = (e?: PointerEvent<HTMLDivElement>): void => {
+    if (e) pointers.current.delete(e.pointerId)
+    else pointers.current.clear()
+
+    // Nhấc MỘT ngón khi đang pinch: không quay về 'paint', vì ngón còn lại vẫn
+    // đang trên màn hình và sẽ vẽ một vệt ngoài ý muốn. Đợi nhấc hết.
+    if (pointers.current.size > 0) {
+      lastPinchDist.current = 0
+      lastPoint.current = null
+      return
+    }
+
     dragMode.current = 'none'
     lastRegion.current = null
     lastPoint.current = null
+    lastPinchDist.current = 0
   }
 
   const onWheel = (e: WheelEvent<HTMLDivElement>): void => {
@@ -294,6 +371,9 @@ export function PaintCanvas({
         background: '#e2e8f0',
         touchAction: 'none',
         outlineOffset: 2,
+        // Con trỏ nói rõ đang ở công cụ nào — không có tín hiệu này thì người
+        // dùng không biết cú kéo tiếp theo sẽ tô hay sẽ di chuyển tranh.
+        cursor: tool === 'pan' ? 'grab' : 'crosshair',
       }}
     >
       {/*

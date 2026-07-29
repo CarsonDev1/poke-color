@@ -71,6 +71,7 @@ function PlayScreen({ puzzleId, puzzle, title }: { puzzleId: string; puzzle: Puz
   const [peekError, setPeekError] = useState<string | null>(null)
   const [askReset, setAskReset] = useState(false)
   const [showShare, setShowShare] = useState(false)
+  const [tool, setTool] = useState<'paint' | 'pan'>('paint')
   const [showDone, setShowDone] = useState(false)
   // Nội dung của vùng aria-live dùng chung — cập nhật bởi CẢ hai nguồn: đổi
   // sau mỗi lượt tô (`paint.announcement`, đã có sẵn) LẪN đổi mỗi khi con trỏ
@@ -296,7 +297,36 @@ function PlayScreen({ puzzleId, puzzle, title }: { puzzleId: string; puzzle: Puz
           width={size.w}
           height={size.h}
           revision={paint.revision}
+          tool={tool}
         />
+      </div>
+
+      {/*
+        Công cụ Tô / Kéo. Cần có mặt TƯỜNG MINH: trước đây pan chỉ dùng được bằng
+        chuột giữa hoặc giữ Space — trên cảm ứng không có cả hai, nên zoom vào là
+        không di chuyển được tranh nữa. Hai ngón vẫn kéo/pinch được, nhưng nút
+        này là thứ người dùng THẤY.
+      */}
+      <div role="group" aria-label="Công cụ" style={{ display: 'flex', gap: 8 }}>
+        <button
+          type="button"
+          aria-pressed={tool === 'paint'}
+          onClick={() => setTool('paint')}
+          style={toolBtn(tool === 'paint')}
+        >
+          Tô màu
+        </button>
+        <button
+          type="button"
+          aria-pressed={tool === 'pan'}
+          onClick={() => setTool('pan')}
+          style={toolBtn(tool === 'pan')}
+        >
+          Kéo di chuyển
+        </button>
+        <span style={{ fontSize: 13, color: '#64748b', alignSelf: 'center' }}>
+          Hoặc: hai ngón để kéo và phóng · con lăn để phóng · giữ Space rồi kéo
+        </span>
       </div>
 
       {peek && originalUrl && (
@@ -356,4 +386,16 @@ function ResetConfirmDialog({
       </div>
     </div>
   )
+}
+
+function toolBtn(active: boolean): React.CSSProperties {
+  return {
+    padding: '6px 14px',
+    borderRadius: 8,
+    border: active ? '2px solid #111827' : '1px solid #cbd5e1',
+    background: active ? '#111827' : '#fff',
+    color: active ? '#fff' : '#111827',
+    fontWeight: active ? 700 : 400,
+    cursor: 'pointer',
+  }
 }
