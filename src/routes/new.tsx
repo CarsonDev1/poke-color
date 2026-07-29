@@ -1,5 +1,7 @@
+import { AnimatePresence, motion } from 'framer-motion'
+import { ArrowLeft, Brush, Loader2, RefreshCw } from 'lucide-react'
 import { useCallback, useRef, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { assemblePuzzle, decodePuzzleBin, decodeRegions } from '@/core/codec/puzzle-format'
 import { DEFAULT_PARAMS, PRESETS, STAGE_LABELS, type PipelineParams, type PipelineStage, type Puzzle, type RgbaImage } from '@/core/types'
 import { gzip } from '@/data/compress'
@@ -10,6 +12,9 @@ import { Dropzone } from '@/ui/components/dropzone'
 import { PreviewCanvas } from '@/ui/components/preview-canvas'
 import { TunePanel, type TuneValue } from '@/ui/components/tune-panel'
 import { checkQuality, type QualityVerdict } from '@/ui/quality-check'
+import { Button } from '@/ui/primitives/button'
+import { Card } from '@/ui/primitives/card'
+import { Badge, PageTitle, Shell } from '@/ui/primitives/misc'
 
 interface Draft {
   puzzle: Puzzle
@@ -136,77 +141,146 @@ export default function NewPuzzleRoute() {
   }
 
   return (
-    <main style={{ maxWidth: 1100, margin: '0 auto', padding: 24, display: 'grid', gap: 24 }}>
-      <h1>Tạo tranh tô màu mới</h1>
+    <Shell>
+      <motion.div
+        initial={{ opacity: 0, y: -12 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ type: 'spring', stiffness: 260, damping: 26 }}
+        className="mb-6 flex flex-wrap items-center justify-between gap-3"
+      >
+        <div>
+          <PageTitle>Tạo tranh tô màu mới</PageTitle>
+          <p className="mt-1 text-sm text-ink-400">
+            Tải ảnh lên, app tự chia thành vùng có số. Tinh chỉnh rồi lưu lại.
+          </p>
+        </div>
+        <Link to="/library">
+          <Button variant="ghost" size="sm">
+            <ArrowLeft size={16} />
+            Thư viện
+          </Button>
+        </Link>
+      </motion.div>
 
       {!file && <Dropzone onFile={onFile} error={error} />}
 
       {file && (
-        <div style={{ display: 'grid', gridTemplateColumns: 'minmax(280px, 340px) 1fr', gap: 24 }}>
-          <section style={{ display: 'grid', gap: 20, alignContent: 'start' }}>
-            <label style={{ display: 'grid', gap: 4 }}>
-              Tên tranh
-              <input value={title} onChange={(e) => setTitle(e.target.value)} />
-            </label>
+        <div className="grid gap-6 lg:grid-cols-[minmax(280px,340px)_1fr]">
+          <section className="grid content-start gap-5">
+            <Card className="p-4">
+              <label className="grid gap-1.5 text-sm font-semibold text-ink-200">
+                Tên tranh
+                <input
+                  value={title}
+                  onChange={(e) => setTitle(e.target.value)}
+                  className="rounded-xl border border-ink-700 bg-ink-950/60 px-3 py-2 text-white outline-none transition-colors focus:border-aqua-400"
+                />
+              </label>
+            </Card>
 
-            <TunePanel value={tune} onChange={setTune} disabled={busy} />
+            <Card className="p-4">
+              <TunePanel value={tune} onChange={setTune} disabled={busy} />
+            </Card>
 
-            <div style={{ display: 'flex', gap: 12 }}>
-              <button
-                type="button"
+            <div className="flex flex-wrap gap-2">
+              <Button
+                variant="secondary"
                 disabled={busy || !imageRef.current}
                 onClick={() => imageRef.current && void generate(imageRef.current, tune)}
               >
+                <RefreshCw size={16} className={busy ? 'animate-spin' : undefined} />
                 Sinh lại
-              </button>
-              <button type="button" disabled={busy || !draft || saving} onClick={() => void save()}>
+              </Button>
+              <Button
+                variant="primary"
+                disabled={busy || !draft || saving}
+                onClick={() => void save()}
+              >
+                {saving ? <Loader2 size={16} className="animate-spin" /> : <Brush size={16} />}
                 {saving ? 'Đang lưu…' : 'Lưu và tô'}
-              </button>
+              </Button>
             </div>
 
-            <button
-              type="button"
+            <Button
+              variant="ghost"
+              size="sm"
+              className="justify-self-start text-aqua-400"
               onClick={() => {
                 setFile(null)
                 setDraft(null)
                 setError(null)
                 imageRef.current = null
               }}
-              style={{ justifySelf: 'start', background: 'none', border: 0, color: '#2563eb', padding: 0 }}
             >
               Chọn ảnh khác
-            </button>
+            </Button>
           </section>
 
-          <section>
-            {busy && (
-              <p role="status">
-                Đang xử lý{stage ? `: ${STAGE_LABELS[stage]}` : ''}…
-              </p>
+          <section className="grid content-start gap-3">
+            <AnimatePresence>
+              {busy && (
+                <motion.div
+                  initial={{ opacity: 0, y: -8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0 }}
+                >
+                  <Card className="flex items-center gap-3 p-4">
+                    <Loader2 className="animate-spin text-neon-400" size={18} />
+                    <div className="flex-1">
+                      <p role="status" className="text-sm font-semibold text-white">
+                        Đang xử lý{stage ? `: ${STAGE_LABELS[stage]}` : ''}…
+                      </p>
+                      {/*
+                        Nói trước là có thể lâu. Ảnh nhiều màu tốn ~20s ở mặc định
+                        (median + quantize là 96% chi phí — xem spec §23), và không
+                        báo trước thì người dùng tưởng app treo và tải lại trang.
+                      */}
+                      <p className="text-xs text-ink-400">
+                        Tranh nhiều màu có thể mất vài chục giây.
+                      </p>
+                    </div>
+                  </Card>
+                </motion.div>
+              )}
+            </AnimatePresence>
+
+            {error && (
+              <Card className="border-red-500/40 bg-red-500/10 p-4">
+                <p role="alert" className="text-sm text-red-200">
+                  {error}
+                </p>
+              </Card>
             )}
-            {error && <p role="alert" style={{ color: '#b91c1c' }}>{error}</p>}
 
             {draft && (
-              <>
+              <motion.div
+                initial={{ opacity: 0, scale: 0.98 }}
+                animate={{ opacity: 1, scale: 1 }}
+                className="grid gap-3"
+              >
                 {draft.verdict.level !== 'ok' && (
-                  <div
-                    role="alert"
-                    style={{ background: '#fffbeb', border: '1px solid #fcd34d', borderRadius: 8, padding: 12, marginBottom: 12 }}
-                  >
-                    <strong>{draft.verdict.message}</strong>
-                    <div>{draft.verdict.hint}</div>
-                  </div>
+                  <Card role="alert" className="border-sun-400/40 bg-sun-400/10 p-4">
+                    <strong className="text-sm text-sun-400">{draft.verdict.message}</strong>
+                    <div className="mt-1 text-sm text-ink-200">{draft.verdict.hint}</div>
+                  </Card>
                 )}
-                <p style={{ color: '#475569' }}>
-                  {draft.puzzle.regions.length} vùng · {draft.puzzle.palette.length} màu ·{' '}
-                  {draft.puzzle.width}×{draft.puzzle.height}
-                </p>
-                <PreviewCanvas puzzle={draft.puzzle} maxWidth={680} />
-              </>
+
+                <div className="flex flex-wrap items-center gap-2">
+                  <Badge tone="neon">{draft.puzzle.regions.length} vùng</Badge>
+                  <Badge tone="aqua">{draft.puzzle.palette.length} màu</Badge>
+                  <Badge>
+                    {draft.puzzle.width}×{draft.puzzle.height}
+                  </Badge>
+                </div>
+
+                <Card className="overflow-hidden p-2">
+                  <PreviewCanvas puzzle={draft.puzzle} maxWidth={680} />
+                </Card>
+              </motion.div>
             )}
           </section>
         </div>
       )}
-    </main>
+    </Shell>
   )
 }

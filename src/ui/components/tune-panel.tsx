@@ -1,4 +1,5 @@
 import { MAX_LABELLED_COLORS } from '@/core/label-alphabet'
+import { cn } from '@/lib/utils'
 import { PRESETS, type PresetName } from '@/core/types'
 
 export interface TuneValue {
@@ -35,73 +36,128 @@ export function TunePanel({
   }
 
   return (
-    <div style={{ display: 'grid', gap: 16 }}>
-      <fieldset style={{ border: 0, padding: 0, margin: 0 }}>
-        <legend style={{ fontWeight: 600, marginBottom: 8 }}>Độ khó</legend>
-        {/* wrap: bốn nhãn cộng lại vượt một dòng — "Ngang sách (30 màu ·
-            ~4500 vùng)" là dài nhất. Không viết tắt nhãn để tránh gãy dòng. */}
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, rowGap: 8 }}>
-          {(Object.keys(PRESETS) as PresetName[]).map((p) => (
-            <label key={p} style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-              <input
-                type="radio"
-                name="preset"
-                disabled={disabled}
-                checked={value.preset === p}
-                onChange={() => pickPreset(p)}
-              />
-              {PRESET_LABELS[p]}
-              <span style={{ color: '#64748b', fontSize: 13 }}>
-                ({PRESETS[p].k} màu · ~{PRESETS[p].targetRegions} vùng)
-              </span>
-            </label>
-          ))}
+    <div className="grid gap-5">
+      <fieldset className="m-0 border-0 p-0">
+        <legend className="mb-2 text-sm font-bold text-white">Độ khó</legend>
+        {/*
+          Preset là các thẻ bấm được, không phải radio tí xíu cạnh chữ: đây là lựa
+          chọn quan trọng nhất trên màn này và vùng bấm phải đủ lớn cho ngón tay.
+          Vẫn là `<input type="radio">` thật bên dưới (chỉ ẩn về mặt hình ảnh) nên
+          bàn phím và screen reader không mất gì.
+        */}
+        <div className="grid grid-cols-2 gap-2">
+          {(Object.keys(PRESETS) as PresetName[]).map((p) => {
+            const active = value.preset === p
+            return (
+              <label
+                key={p}
+                className={cn(
+                  'cursor-pointer rounded-xl border-2 p-2.5 transition-colors',
+                  active
+                    ? 'border-neon-400 bg-neon-500/12'
+                    : 'border-ink-700 bg-ink-950/40 hover:border-ink-600',
+                  disabled && 'cursor-not-allowed opacity-50',
+                )}
+              >
+                <input
+                  type="radio"
+                  name="preset"
+                  disabled={disabled}
+                  checked={active}
+                  onChange={() => pickPreset(p)}
+                  className="sr-only"
+                />
+                <span className="block text-sm font-bold text-white">{PRESET_LABELS[p]}</span>
+                <span className="block text-[11px] text-ink-400">
+                  {PRESETS[p].k} màu · ~{PRESETS[p].targetRegions} vùng
+                </span>
+              </label>
+            )
+          })}
         </div>
       </fieldset>
 
-      <label style={{ display: 'grid', gap: 4 }}>
-        Số màu: {value.k}
-        <input
-          aria-label="Số màu"
-          type="range"
-          min={6}
-          // lấy từ hằng số, không viết cứng 30: trần slider không được lệch
-          // khỏi bảng nhãn, nếu không colorLabel() sẽ throw giữa lúc vẽ
-          max={MAX_LABELLED_COLORS}
-          step={1}
-          disabled={disabled}
-          value={value.k}
-          onChange={(e) => tweak({ k: Number(e.target.value) })}
-        />
-      </label>
+      <Slider
+        label="Số màu"
+        value={value.k}
+        min={6}
+        max={MAX_LABELLED_COLORS}
+        step={1}
+        disabled={disabled}
+        onChange={(k) => tweak({ k })}
+      />
 
-      <label style={{ display: 'grid', gap: 4 }}>
-        Độ chi tiết: ~{value.targetRegions} vùng
-        <input
-          aria-label="Độ chi tiết"
-          type="range"
-          min={200}
-          max={6000}
-          step={100}
-          disabled={disabled}
-          value={value.targetRegions}
-          onChange={(e) => tweak({ targetRegions: Number(e.target.value) })}
-        />
-      </label>
+      <Slider
+        label="Độ chi tiết"
+        value={value.targetRegions}
+        suffix=" vùng"
+        min={200}
+        max={6000}
+        step={100}
+        disabled={disabled}
+        onChange={(targetRegions) => tweak({ targetRegions })}
+      />
 
-      <label style={{ display: 'grid', gap: 4 }}>
-        Làm phẳng: {value.smoothing} lượt
-        <input
-          aria-label="Làm phẳng"
-          type="range"
-          min={0}
-          max={3}
-          step={1}
-          disabled={disabled}
-          value={value.smoothing}
-          onChange={(e) => tweak({ smoothing: Number(e.target.value) })}
-        />
-      </label>
+      <Slider
+        label="Làm phẳng"
+        value={value.smoothing}
+        suffix=" lượt"
+        min={0}
+        max={3}
+        step={1}
+        disabled={disabled}
+        onChange={(smoothing) => tweak({ smoothing })}
+      />
     </div>
+  )
+}
+
+/**
+ * Slider có nhãn và giá trị hiện ngay cạnh.
+ *
+ * `accent-color` để thumb và track dùng màu nhấn của app mà không phải tự vẽ lại
+ * toàn bộ slider bằng CSS — tự vẽ thì mỗi engine một kiểu và rất dễ mất khả năng
+ * điều khiển bằng bàn phím.
+ */
+function Slider({
+  label,
+  value,
+  min,
+  max,
+  step,
+  disabled,
+  suffix = '',
+  onChange,
+}: {
+  label: string
+  value: number
+  min: number
+  max: number
+  step: number
+  disabled: boolean
+  suffix?: string
+  onChange: (v: number) => void
+}) {
+  return (
+    <label className="grid gap-1.5">
+      <span className="flex items-baseline justify-between text-sm font-semibold text-ink-200">
+        {label}
+        <span className="font-mono text-xs text-aqua-400">
+          {value}
+          {suffix}
+        </span>
+      </span>
+      <input
+        aria-label={label}
+        type="range"
+        min={min}
+        max={max}
+        step={step}
+        disabled={disabled}
+        value={value}
+        onChange={(e) => onChange(Number(e.target.value))}
+        className="h-1.5 w-full cursor-pointer appearance-none rounded-full bg-ink-700 accent-neon-500 disabled:cursor-not-allowed disabled:opacity-50"
+      />
+    </label>
   )
 }

@@ -1,3 +1,5 @@
+import { AnimatePresence, motion } from 'framer-motion'
+import { ArrowLeft, Loader2, Redo2, Save, Undo2, Wand2 } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { encodePuzzleBin, encodeRegions } from '@/core/codec/puzzle-format'
@@ -27,6 +29,9 @@ import {
 } from '@/data/local-cache'
 import { rgbCss } from '@/render/layers'
 import { useDialogFocus } from '@/ui/dialog-focus'
+import { Button } from '@/ui/primitives/button'
+import { Card } from '@/ui/primitives/card'
+import { Badge, PageTitle, Shell } from '@/ui/primitives/misc'
 
 export default function EditRoute() {
   const { id = '' } = useParams()
@@ -220,48 +225,96 @@ export default function EditRoute() {
 
   if (error) {
     return (
-      <main style={{ padding: 24 }}>
-        <p role="alert" style={{ color: '#b91c1c' }}>
-          {error}
-        </p>
-        <Link to="/library">Về thư viện</Link>
-      </main>
+      <Shell className="max-w-lg">
+        <Card className="p-6">
+          <p role="alert" className="text-red-300">
+            {error}
+          </p>
+          <Link to="/library" className="mt-4 inline-block text-aqua-400 hover:underline">
+            &larr; Về thư viện
+          </Link>
+        </Card>
+      </Shell>
     )
   }
-  if (!base || !current) return <main style={{ padding: 24 }}>Đang tải…</main>
+  if (!base || !current) {
+    return (
+      <Shell className="max-w-lg">
+        <Card className="flex items-center gap-3 p-6">
+          <Loader2 className="animate-spin text-neon-400" size={20} />
+          <span className="text-ink-400">Đang tải tranh…</span>
+        </Card>
+      </Shell>
+    )
+  }
 
   const p = current.puzzle
   const nOps = activeOps(history).length
 
   return (
-    <main style={{ maxWidth: 1000, margin: '0 auto', padding: 24, display: 'grid', gap: 16 }}>
-      <header style={{ display: 'flex', gap: 16, alignItems: 'center', flexWrap: 'wrap' }}>
-        <Link to="/library">← Thư viện</Link>
-        <strong>Sửa vùng: {base.rec.title}</strong>
-        <span>{p.regions.length} vùng</span>
-        {nOps > 0 && <span style={{ color: '#854d0e' }}>{nOps} thay đổi chưa lưu</span>}
-      </header>
+    <Shell className="max-w-4xl">
+      <motion.header
+        initial={{ opacity: 0, y: -12 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="mb-4 flex flex-wrap items-center justify-between gap-3"
+      >
+        <div>
+          <PageTitle>Sửa vùng</PageTitle>
+          <p className="mt-1 text-sm text-ink-400">{base.rec.title}</p>
+        </div>
+        <div className="flex items-center gap-2">
+          <Badge tone="aqua">{p.regions.length} vùng</Badge>
+          {nOps > 0 && <Badge tone="sun">{nOps} thay đổi chưa lưu</Badge>}
+          <Link to="/library">
+            <Button variant="ghost" size="sm">
+              <ArrowLeft size={16} />
+              Thư viện
+            </Button>
+          </Link>
+        </div>
+      </motion.header>
 
-      <p style={{ margin: 0, color: '#475569' }}>
-        Bấm một vùng để chọn, bấm vùng thứ hai (kề nó) để gộp hai vùng lại. Vùng đang chọn hiện
-        màu vàng.
-      </p>
+      <Card className="mb-3 p-3 text-sm text-ink-400">
+        Bấm một vùng để chọn, bấm vùng thứ hai <strong className="text-ink-200">kề nó</strong> để
+        gộp lại. Vùng đang chọn hiện màu vàng.
+      </Card>
 
-      {opError && (
-        <p role="alert" style={{ margin: 0, color: '#b91c1c' }}>
-          {opError}
-        </p>
-      )}
+      <AnimatePresence>
+        {opError && (
+          <motion.p
+            initial={{ opacity: 0, y: -6 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0 }}
+            role="alert"
+            className="mb-3 rounded-xl bg-red-500/10 p-3 text-sm text-red-200"
+          >
+            {opError}
+          </motion.p>
+        )}
+      </AnimatePresence>
 
-      <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'center' }}>
-        <button type="button" disabled={!canUndo(history)} onClick={() => setHistory(undoHistory)}>
+      <div className="mb-3 flex flex-wrap items-center gap-2">
+        <Button
+          variant="secondary"
+          size="sm"
+          disabled={!canUndo(history)}
+          onClick={() => setHistory(undoHistory)}
+        >
+          <Undo2 size={15} />
           Hoàn tác
-        </button>
-        <button type="button" disabled={!canRedo(history)} onClick={() => setHistory(redoHistory)}>
+        </Button>
+        <Button
+          variant="secondary"
+          size="sm"
+          disabled={!canRedo(history)}
+          onClick={() => setHistory(redoHistory)}
+        >
+          <Redo2 size={15} />
           Làm lại
-        </button>
-        <span style={{ marginLeft: 8 }}>
-          Gộp mọi vùng nhỏ hơn{' '}
+        </Button>
+
+        <span className="ml-2 flex items-center gap-2 text-sm text-ink-400">
+          Gộp vùng nhỏ hơn
           <input
             aria-label="Ngưỡng diện tích"
             type="number"
@@ -269,25 +322,32 @@ export default function EditRoute() {
             max={5000}
             value={smallThreshold}
             onChange={(e) => setSmallThreshold(Number(e.target.value))}
-            style={{ width: 80 }}
-          />{' '}
+            className="w-20 rounded-lg border border-ink-700 bg-ink-950/60 px-2 py-1 text-white outline-none focus:border-aqua-400"
+          />
           px
         </span>
-        <button type="button" onClick={() => run({ kind: 'mergeSmall', minArea: smallThreshold })}>
+        <Button
+          variant="aqua"
+          size="sm"
+          onClick={() => run({ kind: 'mergeSmall', minArea: smallThreshold })}
+        >
+          <Wand2 size={15} />
           Gộp loạt
-        </button>
+        </Button>
       </div>
 
-      <canvas
-        ref={canvasRef}
-        onClick={onCanvasClick}
-        style={{ border: '1px solid #cbd5e1', cursor: 'pointer', imageRendering: 'pixelated' }}
-      />
+      <Card className="mb-3 overflow-hidden p-2">
+        <canvas
+          ref={canvasRef}
+          onClick={onCanvasClick}
+          className="mx-auto block cursor-pointer rounded-lg [image-rendering:pixelated]"
+        />
+      </Card>
 
       {selected !== null && (
-        <fieldset style={{ border: '1px solid #cbd5e1', borderRadius: 8, padding: 12 }}>
-          <legend>Đổi màu vùng {selected}</legend>
-          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+        <Card className="mb-3 p-4">
+          <p className="mb-2 text-sm font-bold text-white">Đổi màu vùng {selected}</p>
+          <div className="flex flex-wrap gap-1.5">
             {p.palette.map((c, i) => (
               <button
                 key={i}
@@ -297,41 +357,42 @@ export default function EditRoute() {
                   run({ kind: 'color', region: selected, colorIndex: i })
                   setSelected(null)
                 }}
-                style={{
-                  width: 40,
-                  padding: 2,
-                  border: '1px solid #94a3b8',
-                  borderRadius: 6,
-                  background: '#fff',
-                }}
+                className="w-11 rounded-lg border border-ink-700 bg-ink-850 p-1 transition-colors hover:border-aqua-400"
               >
                 <span
                   aria-hidden
-                  style={{ display: 'block', height: 20, background: rgbCss(c), borderRadius: 3 }}
+                  className="block h-5 rounded"
+                  style={{ background: rgbCss(c) }}
                 />
-                <span style={{ fontSize: 11 }}>{colorLabel(i)}</span>
+                <span className="font-mono text-[11px] text-ink-200">{colorLabel(i)}</span>
               </button>
             ))}
           </div>
-        </fieldset>
+        </Card>
       )}
 
-      <div>
-        <button type="button" disabled={nOps === 0 || saving} onClick={() => setConfirmSave(true)}>
-          {saving ? 'Đang lưu…' : 'Lưu thay đổi'}
-        </button>
-      </div>
+      <Button
+        variant="primary"
+        size="lg"
+        disabled={nOps === 0 || saving}
+        onClick={() => setConfirmSave(true)}
+      >
+        {saving ? <Loader2 size={17} className="animate-spin" /> : <Save size={17} />}
+        {saving ? 'Đang lưu…' : 'Lưu thay đổi'}
+      </Button>
 
-      {confirmSave && (
-        <ConfirmSave
-          onCancel={() => setConfirmSave(false)}
-          onConfirm={() => {
-            setConfirmSave(false)
-            void save()
-          }}
-        />
-      )}
-    </main>
+      <AnimatePresence>
+        {confirmSave && (
+          <ConfirmSave
+            onCancel={() => setConfirmSave(false)}
+            onConfirm={() => {
+              setConfirmSave(false)
+              void save()
+            }}
+          />
+        )}
+      </AnimatePresence>
+    </Shell>
   )
 }
 
@@ -343,34 +404,37 @@ function ConfirmSave({ onCancel, onConfirm }: { onCancel: () => void; onConfirm:
   const primaryRef = useDialogFocus<HTMLButtonElement>(onCancel)
 
   return (
-    <div
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
       role="dialog"
       aria-modal="true"
       aria-label="Xác nhận lưu thay đổi"
-      style={{
-        position: 'fixed',
-        inset: 0,
-        background: 'rgba(15,23,42,.45)',
-        display: 'grid',
-        placeItems: 'center',
-        padding: 16,
-      }}
+      className="fixed inset-0 z-30 grid place-items-center bg-ink-950/70 p-4 backdrop-blur-sm"
     >
-      <div style={{ background: '#fff', borderRadius: 12, padding: 20, maxWidth: 420, display: 'grid', gap: 12 }}>
-        <h2 style={{ margin: 0 }}>Lưu sẽ XOÁ tiến độ tô</h2>
-        <p style={{ margin: 0 }}>
-          Sửa vùng làm số hiệu các vùng thay đổi, nên tiến độ tô hiện tại không còn khớp và sẽ bị
-          xoá. Bạn sẽ tô lại từ đầu.
-        </p>
-        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-          <button type="button" onClick={onCancel}>
-            Huỷ
-          </button>
-          <button ref={primaryRef} type="button" onClick={onConfirm}>
-            Lưu và xoá tiến độ
-          </button>
-        </div>
-      </div>
-    </div>
+      <motion.div
+        initial={{ scale: 0.9, y: 12 }}
+        animate={{ scale: 1, y: 0 }}
+        exit={{ scale: 0.95, opacity: 0 }}
+        transition={{ type: 'spring', stiffness: 320, damping: 26 }}
+      >
+        <Card className="max-w-sm p-6">
+          <h2 className="font-display mb-1 text-lg font-bold text-white">Lưu sẽ XOÁ tiến độ tô</h2>
+          <p className="mb-5 text-sm text-ink-400">
+            Sửa vùng làm số hiệu các vùng thay đổi, nên tiến độ tô hiện tại không còn khớp và sẽ bị
+            xoá. Bạn sẽ tô lại từ đầu.
+          </p>
+          <div className="flex justify-end gap-2">
+            <Button variant="ghost" onClick={onCancel}>
+              Huỷ
+            </Button>
+            <Button ref={primaryRef} variant="danger" onClick={onConfirm}>
+              Lưu và xoá tiến độ
+            </Button>
+          </div>
+        </Card>
+      </motion.div>
+    </motion.div>
   )
 }

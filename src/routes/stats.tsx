@@ -1,3 +1,5 @@
+import { motion } from 'framer-motion'
+import { ArrowLeft, Brush, Clock, Flame, Trophy } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import {
@@ -9,6 +11,9 @@ import {
   type PuzzleStat,
 } from '@/core/engine/stats'
 import { listActivity, listPuzzles, loadProgress } from '@/data/local-cache'
+import { Button } from '@/ui/primitives/button'
+import { Card } from '@/ui/primitives/card'
+import { PageTitle, Shell, Skeleton } from '@/ui/primitives/misc'
 
 export default function StatsRoute() {
   const [stats, setStats] = useState<PuzzleStat[] | null>(null)
@@ -52,49 +57,73 @@ export default function StatsRoute() {
 
   if (error) {
     return (
-      <main style={{ padding: 24 }}>
-        <p role="alert" style={{ color: '#b91c1c' }}>
-          {error}
-        </p>
-        <Link to="/library">Về thư viện</Link>
-      </main>
+      <Shell className="max-w-lg">
+        <Card className="p-6">
+          <p role="alert" className="text-red-300">
+            {error}
+          </p>
+          <Link to="/library" className="mt-4 inline-block text-aqua-400 hover:underline">
+            &larr; Về thư viện
+          </Link>
+        </Card>
+      </Shell>
     )
   }
-  if (!stats || !t) return <main style={{ padding: 24 }}>Đang tính…</main>
+  if (!stats || !t) {
+    return (
+      <Shell>
+        <div className="mb-6 h-9 w-40 animate-pulse rounded-xl bg-ink-800" />
+        <div className="grid grid-cols-[repeat(auto-fit,minmax(150px,1fr))] gap-3">
+          {[0, 1, 2, 3].map((i) => (
+            <Skeleton key={i} className="h-24" />
+          ))}
+        </div>
+      </Shell>
+    )
+  }
 
   return (
-    <main style={{ maxWidth: 900, margin: '0 auto', padding: 24, display: 'grid', gap: 20 }}>
-      <header style={{ display: 'flex', gap: 16, alignItems: 'center', flexWrap: 'wrap' }}>
-        <Link to="/library">← Thư viện</Link>
-        <h1 style={{ margin: 0 }}>Thống kê</h1>
-      </header>
-
-      <section
-        style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))',
-          gap: 12,
-        }}
+    <Shell className="max-w-4xl">
+      <motion.header
+        initial={{ opacity: 0, y: -12 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ type: 'spring', stiffness: 260, damping: 26 }}
+        className="mb-6 flex flex-wrap items-center justify-between gap-3"
       >
-        <Card label="Tranh hoàn thành" value={String(t.puzzlesCompleted)} />
-        <Card label="Vùng đã tô" value={t.regionsFilled.toLocaleString('vi-VN')} />
-        <Card label="Tổng thời gian" value={formatDuration(t.activeSeconds)} />
-        <Card
+        <PageTitle>Thống kê</PageTitle>
+        <Link to="/library">
+          <Button variant="ghost" size="sm">
+            <ArrowLeft size={16} />
+            Thư viện
+          </Button>
+        </Link>
+      </motion.header>
+
+      <section className="mb-8 grid grid-cols-[repeat(auto-fit,minmax(150px,1fr))] gap-3">
+        <StatCard label="Tranh hoàn thành" value={String(t.puzzlesCompleted)} icon={<Trophy size={14} />} delay={0} />
+        <StatCard label="Vùng đã tô" value={t.regionsFilled.toLocaleString('vi-VN')} icon={<Brush size={14} />} delay={0.06} />
+        <StatCard label="Tổng thời gian" value={formatDuration(t.activeSeconds)} icon={<Clock size={14} />} delay={0.12} />
+        <StatCard
           label="Chuỗi ngày liên tiếp"
           value={streak > 0 ? `${streak} ngày` : '—'}
           hint={streak === 0 && days.length > 0 ? 'Chuỗi đã đứt, tô hôm nay để bắt đầu lại' : undefined}
+          icon={<Flame size={14} />}
+          delay={0.18}
         />
       </section>
 
       <section>
-        <h2 style={{ fontSize: 18 }}>Theo từng tranh</h2>
+        <h2 className="font-display mb-3 text-lg font-bold text-white">Theo từng tranh</h2>
         {metrics.length === 0 ? (
-          <p style={{ color: '#475569' }}>
-            Chưa có tranh nào. <Link to="/new">Tạo tranh mới</Link>
-          </p>
+          <Card className="p-6 text-center text-sm text-ink-400">
+            Chưa có tranh nào.{' '}
+            <Link to="/new" className="text-aqua-400 hover:underline">
+              Tạo tranh mới
+            </Link>
+          </Card>
         ) : (
-          <div style={{ overflowX: 'auto' }}>
-            <table style={{ borderCollapse: 'collapse', width: '100%', fontSize: 14 }}>
+          <Card className="overflow-x-auto p-1">
+            <table className="w-full border-collapse text-sm">
               <thead>
                 <tr>
                   <Th>Tranh</Th>
@@ -125,31 +154,55 @@ export default function StatsRoute() {
                 ))}
               </tbody>
             </table>
-          </div>
+          </Card>
         )}
       </section>
 
-      <p style={{ color: '#64748b', fontSize: 13, margin: 0 }}>
-        Số liệu tính từ dữ liệu trong máy này. Đăng nhập để gộp cả tiến độ từ thiết bị khác.
-      </p>
-    </main>
+      <p className="mt-6 text-xs text-ink-600">Số liệu tính từ dữ liệu trong máy này.</p>
+    </Shell>
   )
 }
 
-function Card({ label, value, hint }: { label: string; value: string; hint?: string }) {
+/** Một ô số liệu tổng. Icon giúp phân biệt bốn ô khi quét mắt nhanh. */
+function StatCard({
+  label,
+  value,
+  hint,
+  icon,
+  delay,
+}: {
+  label: string
+  value: string
+  hint?: string
+  icon: React.ReactNode
+  delay: number
+}) {
   return (
-    <div style={{ border: '1px solid #e2e8f0', borderRadius: 10, padding: 12 }}>
-      <div style={{ fontSize: 13, color: '#64748b' }}>{label}</div>
-      <div style={{ fontSize: 24, fontWeight: 700 }}>{value}</div>
-      {hint && <div style={{ fontSize: 12, color: '#94a3b8' }}>{hint}</div>}
-    </div>
+    <motion.div
+      initial={{ opacity: 0, y: 14 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ delay, type: 'spring', stiffness: 260, damping: 26 }}
+    >
+      <Card className="p-4">
+        <div className="mb-2 flex items-center gap-2 text-ink-400">
+          {icon}
+          <span className="text-xs font-semibold">{label}</span>
+        </div>
+        {/* tabular-nums: số không nhảy ngang khi giá trị đổi độ dài */}
+        <div className="font-display text-2xl font-extrabold tabular-nums text-white">{value}</div>
+        {hint && <div className="mt-0.5 text-[11px] text-ink-600">{hint}</div>}
+      </Card>
+    </motion.div>
   )
 }
 
-const cell: React.CSSProperties = { border: '1px solid #e2e8f0', padding: '6px 10px', textAlign: 'left' }
 function Th({ children }: { children: React.ReactNode }) {
-  return <th style={cell}>{children}</th>
+  return (
+    <th className="border-b border-ink-800 px-3 py-2 text-left text-xs font-bold text-ink-400">
+      {children}
+    </th>
+  )
 }
 function Td({ children }: { children: React.ReactNode }) {
-  return <td style={cell}>{children}</td>
+  return <td className="border-b border-ink-800/60 px-3 py-2 text-ink-200">{children}</td>
 }

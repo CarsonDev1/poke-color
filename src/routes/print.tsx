@@ -1,3 +1,5 @@
+import { motion } from 'framer-motion'
+import { ArrowLeft, Download, Loader2, Printer } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { decodeRegions } from '@/core/codec/puzzle-format'
@@ -6,6 +8,9 @@ import type { PuzzleRecord } from '@/data/local-cache'
 import { gunzip } from '@/data/compress'
 import { loadBlobs, loadPuzzleRecord } from '@/data/local-cache'
 import { vectorizeInWorker } from '@/data/vectorize-client'
+import { Button } from '@/ui/primitives/button'
+import { Card } from '@/ui/primitives/card'
+import { PageTitle, Shell } from '@/ui/primitives/misc'
 
 type Layout = 'one' | 'quad'
 
@@ -97,23 +102,30 @@ export default function PrintRoute() {
 
   if (error) {
     return (
-      <main style={{ padding: 24 }}>
-        <p role="alert" style={{ color: '#b91c1c' }}>
-          {error}
-        </p>
-        <Link to="/library">Về thư viện</Link>
-      </main>
+      <Shell className="max-w-lg">
+        <Card className="p-6">
+          <p role="alert" className="text-red-300">
+            {error}
+          </p>
+          <Link to="/library" className="mt-4 inline-block text-aqua-400 hover:underline">
+            &larr; Về thư viện
+          </Link>
+        </Card>
+      </Shell>
     )
   }
 
   if (!ready) {
     return (
-      <main style={{ padding: 24 }}>
-        <p>Đang chuyển tranh sang dạng vector để in…</p>
-        <p style={{ color: '#64748b', fontSize: 14 }}>
-          Tranh nhiều vùng có thể mất vài chục giây.
-        </p>
-      </main>
+      <Shell className="max-w-lg">
+        <Card className="flex items-center gap-3 p-6">
+          <Loader2 className="animate-spin text-neon-400" size={20} />
+          <div>
+            <p className="font-semibold text-white">Đang chuyển tranh sang dạng vector…</p>
+            <p className="text-sm text-ink-400">Tranh nhiều vùng có thể mất vài chục giây.</p>
+          </div>
+        </Card>
+      </Shell>
     )
   }
 
@@ -121,60 +133,80 @@ export default function PrintRoute() {
     <>
       <style>{PRINT_CSS}</style>
 
-      <main className="screen-only" style={{ maxWidth: 1000, margin: '0 auto', padding: 24, display: 'grid', gap: 16 }}>
-        <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-          <h1 style={{ margin: 0 }}>In: {ready.rec.title}</h1>
-          <Link to={`/play/${id}`}>Về màn tô</Link>
-        </header>
+      <Shell className="screen-only max-w-4xl">
+        <motion.header
+          initial={{ opacity: 0, y: -12 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="mb-5 flex flex-wrap items-center justify-between gap-3"
+        >
+          <PageTitle>In: {ready.rec.title}</PageTitle>
+          <Link to={`/play/${id}`}>
+            <Button variant="ghost" size="sm">
+              <ArrowLeft size={16} />
+              Về màn tô
+            </Button>
+          </Link>
+        </motion.header>
 
-        <fieldset style={{ border: '1px solid #cbd5e1', borderRadius: 8, padding: 12 }}>
-          <legend>Khổ in</legend>
-          <label style={{ marginRight: 16 }}>
+        <Card className="mb-4 p-4">
+          <fieldset className="m-0 border-0 p-0">
+            <legend className="mb-2 text-sm font-bold text-white">Khổ in</legend>
+            <div className="grid gap-2 sm:grid-cols-2">
+              {([
+                ['one', 'Vừa 1 trang A4', 'Cả tranh trên một tờ'],
+                ['quad', 'Chia 2×2 trang', `To hơn, mép chồng ${OVERLAP_MM}mm để dán lại`],
+              ] as const).map(([key, label, hint]) => (
+                <label
+                  key={key}
+                  className={
+                    'cursor-pointer rounded-xl border-2 p-3 transition-colors ' +
+                    (layout === key
+                      ? 'border-neon-400 bg-neon-500/12'
+                      : 'border-ink-700 bg-ink-950/40 hover:border-ink-600')
+                  }
+                >
+                  <input
+                    type="radio"
+                    name="layout"
+                    checked={layout === key}
+                    onChange={() => setLayout(key)}
+                    className="sr-only"
+                  />
+                  <span className="block text-sm font-bold text-white">{label}</span>
+                  <span className="block text-[11px] text-ink-400">{hint}</span>
+                </label>
+              ))}
+            </div>
+          </fieldset>
+
+          <label className="mt-4 flex cursor-pointer items-center gap-2 text-sm text-ink-200">
             <input
-              type="radio"
-              name="layout"
-              checked={layout === 'one'}
-              onChange={() => setLayout('one')}
-            />{' '}
-            Vừa 1 trang A4
+              type="checkbox"
+              checked={withSolution}
+              onChange={(e) => setWithSolution(e.target.checked)}
+              className="h-4 w-4 accent-neon-500"
+            />
+            In kèm trang bản giải
           </label>
-          <label>
-            <input
-              type="radio"
-              name="layout"
-              checked={layout === 'quad'}
-              onChange={() => setLayout('quad')}
-            />{' '}
-            Chia 2×2 trang (to hơn, dán lại)
-          </label>
-        </fieldset>
+        </Card>
 
-        <label>
-          <input
-            type="checkbox"
-            checked={withSolution}
-            onChange={(e) => setWithSolution(e.target.checked)}
-          />{' '}
-          In kèm trang bản giải
-        </label>
-
-        <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-          <button type="button" onClick={() => window.print()}>
+        <div className="mb-4 flex flex-wrap gap-2">
+          <Button variant="primary" onClick={() => window.print()}>
+            <Printer size={16} />
             In
-          </button>
-          <button type="button" onClick={() => download('outline')}>
-            Tải SVG bản để tô
-          </button>
-          <button type="button" onClick={() => download('solution')}>
-            Tải SVG bản giải
-          </button>
+          </Button>
+          <Button variant="secondary" onClick={() => download('outline')}>
+            <Download size={16} />
+            SVG bản để tô
+          </Button>
+          <Button variant="ghost" onClick={() => download('solution')}>
+            <Download size={16} />
+            SVG bản giải
+          </Button>
         </div>
 
-        <p style={{ color: '#64748b', fontSize: 14, margin: 0 }}>
-          Xem trước bên dưới đúng như khi in. Chia 2×2 có mép chồng {OVERLAP_MM}mm để dán lại
-          không hở.
-        </p>
-      </main>
+        <p className="text-sm text-ink-400">Xem trước bên dưới đúng như khi in.</p>
+      </Shell>
 
       {/* ------------------------- phần được in ------------------------- */}
       <div className="print-root">
@@ -284,6 +316,16 @@ table.legend th, table.legend td { border: 1px solid #cbd5e1; padding: 4px 8px; 
 .mono { font-family: ui-monospace, monospace; }
 
 @media print {
+  /*
+    ÉP MÀU CHO GIẤY. Giao diện app là dark theme (chữ sáng trên nền tối), và nếu
+    không ghi đè ở đây thì bản in ra là chữ SÁNG TRÊN GIẤY TRẮNG — gần như vô
+    hình. Đây là hệ quả trực tiếp của việc chuyển sang dark theme, và nó chỉ lộ
+    ra khi in thật chứ không thấy trên màn hình.
+  */
+  html, body {
+    background: #fff !important;
+    color: #000 !important;
+  }
   .screen-only { display: none !important; }
   .print-root { max-width: none; margin: 0; padding: 0; }
   .page {

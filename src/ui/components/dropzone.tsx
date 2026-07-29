@@ -1,5 +1,8 @@
+import { motion } from 'framer-motion'
+import { ImagePlus } from 'lucide-react'
 import { useEffect, useId, useState, type DragEvent } from 'react'
 import { validateUpload } from '@/data/validate-upload'
+import { cn } from '@/lib/utils'
 
 export function Dropzone({
   onFile,
@@ -44,6 +47,14 @@ export function Dropzone({
 
   return (
     <div>
+      {/*
+        `<label>` THƯỜNG, không phải `motion.label` với whileTap: framer-motion
+        tự thêm `tabIndex="0"` cho phần tử có gesture tap (để bấm được bằng bàn
+        phím), và điều đó đưa label vào tab order TRƯỚC input — Tab dừng ở label,
+        vốn không mở được dialog chọn file, nên người dùng bàn phím bị kẹt (đúng
+        lỗi I8 mà test bắt được). Hiệu ứng phóng nhẹ làm bằng CSS transition, cho
+        cùng cảm giác mà không chạm vào tab order.
+      */}
       <label
         htmlFor={inputId}
         onDragOver={(e) => {
@@ -52,40 +63,53 @@ export function Dropzone({
         }}
         onDragLeave={() => setDragging(false)}
         onDrop={onDrop}
-        style={{
-          display: 'block',
-          border: `2px dashed ${dragging ? '#2563eb' : '#cbd5e1'}`,
-          borderRadius: 12,
-          padding: '2.5rem 1.5rem',
-          textAlign: 'center',
-          cursor: 'pointer',
-          background: dragging ? '#eff6ff' : '#f8fafc',
-        }}
+        className={cn(
+          'relative block cursor-pointer rounded-xl2 border-2 border-dashed px-6 py-14 text-center',
+          'transition-[colors,transform] duration-200 hover:scale-[1.01] active:scale-[0.99]',
+          dragging
+            ? 'border-neon-400 bg-neon-500/10 shadow-glow'
+            : 'border-ink-700 bg-ink-900/50 hover:border-ink-600',
+        )}
       >
-        Kéo ảnh vào đây, hoặc bấm để chọn ảnh
-        <div style={{ fontSize: 13, color: '#64748b', marginTop: 6 }}>
-          PNG, JPG hoặc WebP · tối đa 15 MB
+        <div
+          className={cn(
+            'mx-auto mb-4 grid h-16 w-16 place-items-center rounded-2xl transition-colors',
+            dragging ? 'bg-neon-500/25 text-neon-400' : 'bg-ink-800 text-ink-400',
+          )}
+        >
+          <ImagePlus size={28} className={dragging ? undefined : 'animate-float'} />
         </div>
+        <span className="font-display block text-base font-bold text-white">
+          {dragging ? 'Thả ảnh vào đây' : 'Kéo ảnh vào đây, hoặc bấm để chọn ảnh'}
+        </span>
+        <span className="mt-1.5 block text-sm text-ink-400">
+          PNG, JPG hoặc WebP · tối đa 15 MB
+        </span>
         <input
           id={inputId}
           aria-label="Chọn ảnh"
           type="file"
           accept="image/png,image/jpeg,image/webp"
-          // sr-only, KHÔNG `display: none`/`visibility: hidden`: cả hai loại
-          // phần tử khỏi tab order lẫn accessibility tree, và `<label>` (dù
-          // forward click tới input) không tự nhận focus — người dùng chỉ
-          // dùng bàn phím sẽ không có cách nào mở được dialog chọn file
-          // (I8). Giữ trong layout (position: absolute, không dùng
-          // display/visibility) để trình duyệt vẫn coi input là focusable.
-          style={{ position: 'absolute', width: 1, height: 1, opacity: 0, overflow: 'hidden' }}
+          // sr-only, KHÔNG `display: none`/`visibility: hidden`: cả hai loại phần
+          // tử khỏi tab order lẫn accessibility tree, và `<label>` (dù forward
+          // click tới input) không tự nhận focus — người dùng chỉ dùng bàn phím
+          // sẽ không có cách nào mở được dialog chọn file (I8). Giữ trong layout
+          // (position absolute, không dùng display/visibility) để trình duyệt vẫn
+          // coi input là focusable.
+          className="absolute h-px w-px overflow-hidden opacity-0"
           onChange={(e) => accept(e.target.files?.[0])}
         />
       </label>
 
       {shown && (
-        <p role="alert" style={{ color: '#b91c1c', marginTop: 12 }}>
+        <motion.p
+          initial={{ opacity: 0, y: -6 }}
+          animate={{ opacity: 1, y: 0 }}
+          role="alert"
+          className="mt-3 rounded-xl bg-red-500/10 p-3 text-sm text-red-200"
+        >
           {shown}
-        </p>
+        </motion.p>
       )}
     </div>
   )
