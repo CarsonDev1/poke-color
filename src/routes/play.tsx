@@ -5,6 +5,8 @@ import {
   Eye,
   Hand,
   Loader2,
+  Music,
+  Music2,
   Printer,
   RotateCcw,
   Share2,
@@ -18,6 +20,7 @@ import { SoundBoard } from '@/audio/synth'
 import { colorLabel } from '@/core/label-alphabet'
 import type { Puzzle } from '@/core/types'
 import { listPuzzles, loadOriginal, loadPuzzle, saveThumbnail } from '@/data/local-cache'
+import { BackgroundMusic, useBgmEnabled } from '@/ui/components/bgm'
 import { CompletionBanner } from '@/ui/components/completion-banner'
 import { CelebrationBurst } from '@/ui/components/decor'
 import { PaintCanvas } from '@/ui/components/paint-canvas'
@@ -106,6 +109,7 @@ function PlayScreen({ puzzleId, puzzle, title }: { puzzleId: string; puzzle: Puz
   const [askReset, setAskReset] = useState(false)
   const [showShare, setShowShare] = useState(false)
   const [tool, setTool] = useState<'paint' | 'pan'>('paint')
+  const [bgm, setBgm] = useBgmEnabled()
   const [showDone, setShowDone] = useState(false)
   const [burst, setBurst] = useState(false)
   // Nội dung của vùng aria-live dùng chung — cập nhật bởi CẢ hai nguồn: đổi
@@ -309,6 +313,20 @@ function PlayScreen({ puzzleId, puzzle, title }: { puzzleId: string; puzzle: Puz
           <Button size="icon" variant="ghost" onClick={toggleMute} aria-label={muted ? 'Bật tiếng' : 'Tắt tiếng'}>
             {muted ? <VolumeX size={16} /> : <Volume2 size={16} />}
           </Button>
+          {/*
+            Nút RIÊNG cho nhạc nền, không gộp vào "Tắt tiếng": nút kia quản âm
+            thanh khi tô (SoundBoard), và gộp lại thì muốn im tiếng tô là mất
+            luôn nhạc — hai thứ người dùng muốn điều khiển độc lập.
+          */}
+          <Button
+            size="icon"
+            variant="ghost"
+            onClick={() => setBgm(!bgm)}
+            aria-label={bgm ? 'Tắt nhạc nền' : 'Bật nhạc nền'}
+            className={bgm ? 'text-aqua-400' : undefined}
+          >
+            {bgm ? <Music size={16} /> : <Music2 size={16} />}
+          </Button>
           <Button size="icon" variant="ghost" onClick={() => setShowShare((v) => !v)} aria-label={showShare ? 'Ẩn chia sẻ' : 'Chia sẻ'}>
             <Share2 size={16} />
           </Button>
@@ -466,6 +484,12 @@ function PlayScreen({ puzzleId, puzzle, title }: { puzzleId: string; puzzle: Puz
         an mung lap vo han se che mat chinh buc tranh nguoi choi vua hoan thanh.
       */}
       <CelebrationBurst running={burst} onDone={() => setBurst(false)} />
+
+      {/*
+        Nhạc nền — iframe ẩn, tự dừng khi rời màn (React gỡ component). Đặt ở
+        cuối cây để nó không bao giờ chen vào layout của canvas.
+      */}
+      <BackgroundMusic enabled={bgm} />
 
       {showDone && paint.isComplete && (
         <CompletionBanner originalUrl={originalUrl} onClose={() => setShowDone(false)} />
