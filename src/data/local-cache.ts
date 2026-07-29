@@ -8,7 +8,8 @@ import { gunzip } from '@/data/compress'
 import type { PipelineParams, Puzzle, Rgb } from '@/core/types'
 
 const DB_NAME = 'pokemon-color'
-const DB_VERSION = 1
+/** 2: thêm store `outbox` cho đồng bộ Supabase */
+const DB_VERSION = 2
 
 export interface PuzzleRecord {
   id: string
@@ -55,23 +56,50 @@ interface BlobRecord {
  * lần autosave tiến độ (rất thường xuyên) sẽ phải ghi lại luôn cả những MB dữ
  * liệu không đổi đó.
  */
+/**
+ * Một việc đang chờ đẩy lên Supabase.
+ *
+ * KHÔNG chứa dữ liệu — chỉ chứa "puzzle nào, loại gì". Dữ liệu thật được đọc
+ * tươi từ store `progress`/`puzzles` lúc drain. Nhờ vậy: (a) tô 200 vùng chỉ
+ * sinh một mục chờ thay vì 200 bản snapshot, (b) không bao giờ đẩy lên một
+ * trạng thái cũ hơn trạng thái đang có trong máy.
+ */
+export interface OutboxItem {
+  kind: 'progress' | 'puzzle'
+  puzzleId: string
+  queuedAt: number
+}
+
 interface Schema extends DBSchema {
   puzzles: { key: string; value: PuzzleRecord; indexes: { createdAt: number } }
   blobs: { key: string; value: BlobRecord }
   progress: { key: string; value: ProgressRecord }
   thumbnails: { key: string; value: { puzzleId: string; blob: Blob } }
+  outbox: { key: [string, string]; value: OutboxItem }
 }
 
 let dbPromise: Promise<IDBPDatabase<Schema>> | null = null
 
 function db(): Promise<IDBPDatabase<Schema>> {
   dbPromise ??= openDB<Schema>(DB_NAME, DB_VERSION, {
-    upgrade(d) {
-      const puzzles = d.createObjectStore('puzzles', { keyPath: 'id' })
-      puzzles.createIndex('createdAt', 'createdAt')
-      d.createObjectStore('blobs', { keyPath: 'puzzleId' })
-      d.createObjectStore('progress', { keyPath: 'puzzleId' })
-      d.createObjectStore('thumbnails', { keyPath: 'puzzleId' })
+    // PHẢI theo `oldVersion`, không được tạo vô điều kiện: người dùng cũ đã có
+    // database v1 với 4 store, và `createObjectStore` trên store đã tồn tại sẽ
+    // ném ConstraintError — mở database thất bại và mất sạch thư viện của họ.
+    upgrade(d, oldVersion) {
+      if (oldVersion < 1) {
+        const puzzles = d.createObjectStore('puzzles', { keyPath: 'id' })
+        puzzles.createIndex('createdAt', 'createdAt')
+        d.createObjectStore('blobs', { keyPath: 'puzzleId' })
+        d.createObjectStore('progress', { keyPath: 'puzzleId' })
+        d.createObjectStore('thumbnails', { keyPath: 'puzzleId' })
+      }
+      if (oldVersion < 2) {
+        // Khoá ghép [kind, puzzleId] chứ KHÔNG phải seq tự tăng: outbox là tập
+        // "cái gì đang chờ đẩy", không phải log thao tác. `put` cùng khoá sẽ ghi
+        // đè, nên tô 200 vùng chỉ để lại MỘT mục chờ — và replay trở thành luỹ
+        // đẳng theo cấu trúc, không phải nhờ khéo tay.
+        d.createObjectStore('outbox', { keyPath: ['kind', 'puzzleId'] })
+      }
     },
   })
   return dbPromise
@@ -192,11 +220,15 @@ export async function loadOriginal(id: string): Promise<Blob | undefined> {
 /** xoá sạch mọi thứ liên quan tới puzzle này */
 export async function deletePuzzle(id: string): Promise<void> {
   const d = await db()
-  const tx = d.transaction(['puzzles', 'blobs', 'progress', 'thumbnails'], 'readwrite')
+  const tx = d.transaction(['puzzles', 'blobs', 'progress', 'thumbnails', 'outbox'], 'readwrite')
   await tx.objectStore('puzzles').delete(id)
   await tx.objectStore('blobs').delete(id)
   await tx.objectStore('progress').delete(id)
   await tx.objectStore('thumbnails').delete(id)
+  // Phải xoá cả việc đang chờ đẩy. Để lại thì drain sẽ mãi mãi cố đồng bộ một
+  // puzzle không còn tồn tại, và banner "chưa đồng bộ · 1" không bao giờ tắt.
+  await tx.objectStore('outbox').delete(['progress', id])
+  await tx.objectStore('outbox').delete(['puzzle', id])
   await tx.done
 }
 
@@ -214,4 +246,32 @@ export async function saveThumbnail(puzzleId: string, blob: Blob): Promise<void>
 
 export async function loadThumbnail(puzzleId: string): Promise<Blob | undefined> {
   return (await (await db()).get('thumbnails', puzzleId))?.blob
+}
+
+// ------------------------------------------------------------------ outbox
+// Chỉ là primitive lưu trữ. Việc drain (đẩy lên Supabase, hợp nhất, thử lại)
+// nằm ở data/sync.ts — ở đây không biết gì về mạng.
+
+/**
+ * Đánh dấu một puzzle cần đẩy lên. `put` ghi đè cùng khoá nên gọi bao nhiêu lần
+ * cũng chỉ còn một mục — tô 200 vùng vẫn là một việc chờ.
+ */
+export async function enqueueOutbox(kind: OutboxItem['kind'], puzzleId: string): Promise<void> {
+  await (await db()).put('outbox', { kind, puzzleId, queuedAt: Date.now() })
+}
+
+export async function listOutbox(): Promise<OutboxItem[]> {
+  return (await db()).getAll('outbox')
+}
+
+export async function countOutbox(): Promise<number> {
+  return (await db()).count('outbox')
+}
+
+/** Gọi sau khi đẩy THÀNH CÔNG. Thất bại thì để nguyên để lần drain sau thử lại. */
+export async function dequeueOutbox(
+  kind: OutboxItem['kind'],
+  puzzleId: string,
+): Promise<void> {
+  await (await db()).delete('outbox', [kind, puzzleId])
 }
