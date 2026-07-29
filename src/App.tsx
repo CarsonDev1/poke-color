@@ -1,4 +1,5 @@
 import { createHashRouter, Navigate, RouterProvider } from 'react-router-dom'
+import EditRoute from '@/routes/edit'
 import LibraryRoute from '@/routes/library'
 import LoginRoute from '@/routes/login'
 import NewPuzzleRoute from '@/routes/new'
@@ -19,6 +20,7 @@ const router = createHashRouter([
   { path: '/new', element: <NewPuzzleRoute /> },
   { path: '/play/:id', element: <PlayRoute /> },
   { path: '/print/:id', element: <PrintRoute /> },
+  { path: '/edit/:id', element: <EditRoute /> },
 ])
 
 export default function App() {

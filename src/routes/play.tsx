@@ -227,6 +227,7 @@ function PlayScreen({ puzzleId, puzzle, title }: { puzzleId: string; puzzle: Puz
           {peek ? 'Ẩn ảnh gốc' : 'Xem ảnh gốc'}
         </button>
         <Link to={`/print/${puzzleId}`}>In</Link>
+        <Link to={`/edit/${puzzleId}`}>Sửa vùng</Link>
         <button type="button" onClick={toggleMute}>
           {muted ? 'Bật tiếng' : 'Tắt tiếng'}
         </button>
