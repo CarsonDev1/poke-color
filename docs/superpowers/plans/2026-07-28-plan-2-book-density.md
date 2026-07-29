@@ -724,3 +724,40 @@ Chi phí: **0ms**. Không gọi distance transform.
 **Files:** `src/core/pipeline.ts`, `src/data/generate-client.ts`
 
 `BISECTION_MAX_ITERS` 6 → 20. Mỗi vòng chỉ ~300ms (labelRegions 88 + mergeSmall 219) nên +14 vòng ≈ +4.2s — rẻ so với 17s của median+quantize. `PIPELINE_TIMEOUT_MS` 60_000 → 180_000 và sửa cả câu thông báo đang nói "60 giây".
+
+### Kết quả sau khi sửa (Task 7–9) — kiểm trên HAI loại ảnh
+
+Giả thuyết "tranh minh hoạ cho nhiều vùng đều đặn hơn ảnh chụp" là chỗ dựa của
+quyết định `minLabelRadius=2`, nên đã kiểm bằng fixture riêng chứ không tin suông.
+
+| preset | target | ảnh kiểu CHỤP | tranh MINH HOẠ | có nhãn |
+|---|---|---|---|---|
+| de | 400 | 112 | **301** | 100% |
+| vua | 1200 | 263 | **1342** | 100% |
+| kho | 3000 | 268 | **2640** | 100% |
+| sach | 4500 | 661 | **2640** | 100% |
+
+Ba điều được chứng minh:
+
+1. **100% vùng có nhãn** trên tranh minh hoạ — D2 đã sửa xong (trước: 9%).
+2. **Bisection đã bắt được target**: 301/400, 1342/1200, 2640/3000. Trước khi
+   nâng `BISECTION_MAX_ITERS` thì lệch 60–80%.
+3. `sach` chạm trần 2640 vì ẢNH hết chi tiết, không phải vì lỗi. Số vùng phụ
+   thuộc nội dung ảnh; `quality-check` không báo động vì 2640 nằm trong
+   [20, 8000] — đúng.
+
+Tranh minh hoạ còn nhanh gấp 4 (5s so với 20s): ít màu phân biệt hơn nên k-means
+hội tụ sớm hơn.
+
+### Hai defect PHÁT SINH trong lúc sửa, cả hai do đo mới lộ ra
+
+- **Nối chuỗi union-find.** Gộp vùng-mỏng-vào-vùng-mỏng nối A→B→C ngay trong một
+  lượt. Giả thuyết ban đầu của tôi cho rằng đây là nguyên nhân chính làm số vùng
+  tụt 7282→672; đo lại sau khi sửa cho 661 — **giả thuyết SAI**, nguyên nhân
+  chính là bản thân ngưỡng độ dày. Bản sửa vẫn giữ vì nó đúng và gần như miễn phí.
+- **Force-merge O(n) lần rebuild toàn ảnh.** Bản gốc `break` sau mỗi lần gộp để
+  tránh nối chuỗi — chấp nhận được khi chỉ vài vùng lọt tới đó theo điều kiện
+  area, nhưng với điều kiện độ dày thì hàng trăm vùng lọt tới và mỗi vòng là một
+  `buildAdjacency` + `rebuild` quét trọn ~1.9M pixel: **đo được 144s** cho một
+  lần sinh. Thay bằng ghép từng cặp rời nhau (`touched`) — nhiều cặp mỗi lượt mà
+  đường gộp vẫn dài tối đa 2.

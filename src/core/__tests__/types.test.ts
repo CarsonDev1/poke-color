@@ -11,7 +11,7 @@ describe('hằng số mặc định', () => {
       targetRegions: 4500,
       smoothing: 0,
       mergeDeltaE: 6,
-      minLabelRadius: 3,
+      minLabelRadius: 2,
     })
   })
 

@@ -1,6 +1,6 @@
 import { deltaE76 } from '@/core/color/delta-e'
 import { rgbToLab } from '@/core/color/srgb-lab'
-import { buildAdjacency, longestNeighbor, longestNeighborWhere } from '@/core/regions/adjacency'
+import { buildAdjacency, longestNeighborWhere } from '@/core/regions/adjacency'
 import { computeAnchors } from '@/core/regions/label-anchor'
 import type { RegionField, RegionMeta, Rgb } from '@/core/types'
 
@@ -252,12 +252,24 @@ export function mergeSmallRegions(
     const adj = buildAdjacency(cur)
     const ds = new DisjointSet(cur.regions.length)
     let merged = false
+
+    // Ghép thành từng CẶP RỜI NHAU, KHÔNG phải một cặp mỗi vòng.
+    //
+    // Bản cũ `break` sau một lần gộp để tránh gộp chuỗi khó đoán. Lúc đó chỉ
+    // vài vùng lọt tới đây (điều kiện area) nên chi phí không đáng kể. Với điều
+    // kiện độ dày thì hàng trăm vùng lọt tới, và mỗi vòng là một buildAdjacency
+    // + rebuild quét trọn ~1.9M pixel: đo được 144s cho một lần sinh, so với
+    // 13s trước đó. `touched` cho phép gộp nhiều cặp một lượt mà VẪN không nối
+    // chuỗi — mỗi vùng tham gia đúng một lần nên đường gộp dài tối đa 2.
+    const touched = new Set<number>()
     for (const r of small) {
-      const target = longestNeighbor(adj, r.id)
+      if (touched.has(r.id)) continue
+      const target = longestNeighborWhere(adj, r.id, (o) => !touched.has(o))
       if (target === null) continue
       ds.union(r.id, target)
+      touched.add(r.id)
+      touched.add(target)
       merged = true
-      break // gộp một cái mỗi vòng để tránh gộp chuỗi khó đoán
     }
     if (!merged) break
     cur = rebuild(cur, ds)

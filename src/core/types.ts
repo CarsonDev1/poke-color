@@ -80,10 +80,19 @@ export const DEFAULT_PARAMS: PipelineParams = {
   // và Task 30 của Plan 1 (snap-to-window) đảm bảo nó không bịa màu.
   smoothing: 0,
   mergeDeltaE: 6,
-  // 3px, không phải 7: ở 4500 vùng thì phần lớn vùng nhỏ hơn bán kính 7 và sẽ
-  // không có nhãn nào cả. Vùng quá nhỏ để in nhãn ở zoom 1 vẫn được bù bằng
-  // cỡ chữ theo scale khi zoom (xem render/label-layer).
-  minLabelRadius: 3,
+  // 2, chọn bằng ĐO chứ không bằng cảm giác. Đây là đòn thật sự quyết định số
+  // vùng, vì `minThickness = 2 * minLabelRadius` trong Stage 4:
+  //   r=1 (dày 2px) => 4426 vùng, 100% có nhãn
+  //   r=2 (dày 4px) => 1194 vùng, 100% có nhãn
+  //   r=3 (dày 6px) =>  661 vùng,  99% có nhãn
+  // r=1 đạt đúng mục tiêu 4500 nhưng bằng những sliver dày 2px: đúng SỐ LƯỢNG,
+  // sai HÌNH DẠNG. Vùng trong trang sách tham chiếu nhỏ mà đều đặn, chứa vừa
+  // một ký tự. r=2 đảm bảo mọi vùng hiện được số của nó.
+  //
+  // Số vùng thực tế phụ thuộc mạnh vào ẢNH: fixture đo là ảnh kiểu chụp, đầy
+  // gradient (sóng nước chu kỳ ~7px) nên sinh nhiều vùng mỏng bị loại. Tranh vẽ
+  // minh hoạ có mảng màu phẳng và cạnh sạch sẽ cho số vùng cao hơn nhiều.
+  minLabelRadius: 2,
 }
 
 export type PresetName = 'de' | 'vua' | 'kho' | 'sach'
