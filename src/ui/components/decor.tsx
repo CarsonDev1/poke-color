@@ -110,11 +110,12 @@ export function AmbientBackground({
         đỡ phía sau, nên chỗ đó cần nhiều trắng; phần giữa toàn là thẻ nội dung
         (tự đục 90%) nên để nền hiện rõ được.
 
-        Ba con số này chọn bằng cách DỰNG ẢNH SO SÁNH rồi nhìn, không đoán: mức
-        62% đều trước đó làm nền gần như vô hình — đúng thứ tính năng này tồn tại
-        để làm, và tôi đã làm mất nó hai lần vì ưu tiên tương phản quá tay.
+        Ba con số này chọn bằng ẢNH CHỤP THẬT tu Chrome headless, không đoán:
+        62% đều -> nền vô hình; 78% ở trên -> cả vùng header trắng bệch, mà đó
+        đúng là phần người dùng nhìn nhiều nhất. Tôi đã làm mất nền ba lần vì ưu
+        tiên tương phản quá tay, nên đừng nâng mấy con số này lên mà không chụp lại.
       */}
-      <div className="absolute inset-0 bg-gradient-to-b from-white/78 via-white/42 to-white/52" />
+      <div className="absolute inset-0 bg-gradient-to-b from-white/52 via-white/34 to-white/44" />
     </div>
   )
 }

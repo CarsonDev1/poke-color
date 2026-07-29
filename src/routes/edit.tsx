@@ -260,7 +260,7 @@ export default function EditRoute() {
       >
         <div>
           <PageTitle>Sửa vùng</PageTitle>
-          <p className="mt-1 text-sm text-slate-500">{base.rec.title}</p>
+          <p className="mt-1 text-sm font-medium text-slate-600">{base.rec.title}</p>
         </div>
         <div className="flex items-center gap-2">
           <Badge tone="aqua">{p.regions.length} vùng</Badge>

@@ -147,7 +147,7 @@ export default function LibraryRoute() {
       >
         <div>
           <PageTitle>Thư viện tranh</PageTitle>
-          <p className="mt-1 text-sm text-slate-500">
+          <p className="mt-1 text-sm font-medium text-slate-600">
             {cards.length > 0
               ? `${cards.length} tranh · ${cards.filter((c) => c.percent === 100).length} đã hoàn thành`
               : 'Tải một bức tranh lên để bắt đầu'}

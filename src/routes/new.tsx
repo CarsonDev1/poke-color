@@ -150,7 +150,7 @@ export default function NewPuzzleRoute() {
       >
         <div>
           <PageTitle>Tạo tranh tô màu mới</PageTitle>
-          <p className="mt-1 text-sm text-slate-500">
+          <p className="mt-1 text-sm font-medium text-slate-600">
             Tải ảnh lên, app tự chia thành vùng có số. Tinh chỉnh rồi lưu lại.
           </p>
         </div>
