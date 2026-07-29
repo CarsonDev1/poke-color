@@ -121,12 +121,12 @@ export default function EditRoute() {
     const p = current?.puzzle
     if (!cv || !p) return
 
-    const maxW = 720
-    const scale = Math.min(1, maxW / p.width)
+    // Chỉ đặt kích thước BITMAP. Bề rộng hiển thị để CSS lo (`w-full h-auto
+    // max-w-[720px]`): trước đây chỗ này ghim `720px` cứng bằng JS, và trên màn
+    // 390px canvas tràn ra ngoài 23px — đo được bằng CDP. Thuộc tính
+    // width/height của canvas đã cho tỉ lệ, nên `h-auto` tự tính chiều cao.
     cv.width = p.width
     cv.height = p.height
-    cv.style.width = `${Math.round(p.width * scale)}px`
-    cv.style.height = `${Math.round(p.height * scale)}px`
 
     const ctx = cv.getContext('2d')
     if (!ctx) return
@@ -340,7 +340,7 @@ export default function EditRoute() {
         <canvas
           ref={canvasRef}
           onClick={onCanvasClick}
-          className="mx-auto block cursor-pointer rounded-lg [image-rendering:pixelated]"
+          className="mx-auto block h-auto w-full max-w-[720px] cursor-pointer rounded-lg [image-rendering:pixelated]"
         />
       </Card>
 

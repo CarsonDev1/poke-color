@@ -5,6 +5,7 @@ import {
   Eye,
   Hand,
   Loader2,
+  MoreHorizontal,
   Music,
   Music2,
   Printer,
@@ -108,6 +109,7 @@ function PlayScreen({ puzzleId, puzzle, title }: { puzzleId: string; puzzle: Puz
   const [askReset, setAskReset] = useState(false)
   const [showShare, setShowShare] = useState(false)
   const [tool, setTool] = useState<'paint' | 'pan'>('paint')
+  const [showMenu, setShowMenu] = useState(false)
   const [bgm, setBgm] = useBgmEnabled()
   const [showDone, setShowDone] = useState(false)
   // Nội dung của vùng aria-live dùng chung — cập nhật bởi CẢ hai nguồn: đổi
@@ -263,6 +265,16 @@ function PlayScreen({ puzzleId, puzzle, title }: { puzzleId: string; puzzle: Puz
 
   const pct = Math.round(paint.progress * 100)
 
+  // `grid-cols-[minmax(0,1fr)]` bên dưới LÀ THỨ SỬA LỖI "vào tô bị cắt trên
+  // điện thoại", không phải trang trí.
+  //
+  // Track `auto` mặc định KHÔNG co xuống dưới min-content của item. PaletteBar có
+  // 16 ô màu × 64px = 1040px min-content, nên trên màn 390px trình duyệt tính
+  // `grid-template-columns: 1040px` — header giãn theo 1040 và nhóm nút hành động
+  // nằm ở [728..1028], tức hoàn toàn ngoài màn hình. Đo được bằng CDP, không đoán.
+  //
+  // `minmax(0, 1fr)` cho phép track co về 0 nên cột luôn đúng bề rộng container.
+  // `min-w-0` trên từng grid item là lớp phòng thủ thứ hai.
   return (
     /*
       `h-[100dvh]` + grid ba hàng (header / canvas / dock): canvas nhận đúng chỗ
@@ -271,12 +283,12 @@ function PlayScreen({ puzzleId, puzzle, title }: { puzzleId: string; puzzle: Puz
       chọn được màu, giữa lúc đang tô. `dvh` chứ không `vh` vì thanh địa chỉ của
       browser mobile co giãn và `vh` sẽ tính theo lúc nó đang ẩn.
     */
-    <div className="grid h-[100dvh] grid-rows-[auto_1fr_auto] overflow-hidden">
+    <div className="grid h-[100dvh] w-full max-w-full grid-cols-[minmax(0,1fr)] grid-rows-[auto_1fr_auto] overflow-hidden">
       <motion.header
         initial={{ y: -16, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
         transition={{ type: 'spring', stiffness: 260, damping: 26 }}
-        className="z-10 flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-slate-200 bg-white/80 px-3 py-2 backdrop-blur-xl sm:px-4"
+        className="z-10 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-2 border-b border-slate-200 bg-white/80 px-2 py-2 backdrop-blur-xl sm:gap-x-3 sm:px-4"
       >
         <Link
           to="/library"
@@ -299,11 +311,19 @@ function PlayScreen({ puzzleId, puzzle, title }: { puzzleId: string; puzzle: Puz
           <Badge tone={pct === 100 ? 'sun' : 'neon'}>{pct}%</Badge>
         </div>
 
-        <div className="ml-auto flex items-center gap-1.5">
+        {/*
+          Hàng nút ĐẦY ĐỦ chỉ từ `sm` trở lên. Trên điện thoại 7 icon xuống dòng
+          thành hàng thứ hai, ăn mất chỗ dọc của canvas — và mỗi icon 32px thì
+          dưới ngưỡng vùng bấm 44px, rất khó bấm bằng ngón tay.
+
+          Vẫn render trong DOM (ẩn bằng CSS) chứ không render có điều kiện: nhờ vậy
+          các nút giữ nguyên accessible name cho test và cho trình đọc màn hình ở
+          mọi khổ.
+        */}
+        <div className="ml-auto hidden items-center gap-1.5 sm:flex">
           <Button size="sm" variant="ghost" onClick={() => setPeek((v) => !v)}>
             <Eye size={16} />
-            <span className="hidden sm:inline">{peek ? 'Ẩn ảnh gốc' : 'Xem ảnh gốc'}</span>
-            <span className="sr-only sm:hidden">{peek ? 'Ẩn ảnh gốc' : 'Xem ảnh gốc'}</span>
+            <span>{peek ? 'Ẩn ảnh gốc' : 'Xem ảnh gốc'}</span>
           </Button>
           <Button size="icon" variant="ghost" onClick={toggleMute} aria-label={muted ? 'Bật tiếng' : 'Tắt tiếng'}>
             {muted ? <VolumeX size={16} /> : <Volume2 size={16} />}
@@ -318,7 +338,7 @@ function PlayScreen({ puzzleId, puzzle, title }: { puzzleId: string; puzzle: Puz
             variant="ghost"
             onClick={() => setBgm(!bgm)}
             aria-label={bgm ? 'Tắt nhạc nền' : 'Bật nhạc nền'}
-            className={bgm ? 'text-aqua-400' : undefined}
+            className={bgm ? 'text-aqua-700' : undefined}
           >
             {bgm ? <Music size={16} /> : <Music2 size={16} />}
           </Button>
@@ -328,27 +348,45 @@ function PlayScreen({ puzzleId, puzzle, title }: { puzzleId: string; puzzle: Puz
           <Link
             to={`/print/${puzzleId}`}
             aria-label="In"
-            className="flex h-8 w-8 items-center justify-center rounded-xl text-slate-500 transition-colors hover:bg-slate-200 hover:text-slate-900"
+            className="flex h-9 w-9 items-center justify-center rounded-xl text-slate-500 transition-colors hover:bg-slate-200 hover:text-slate-900"
           >
             <Printer size={16} />
           </Link>
           <Link
             to={`/edit/${puzzleId}`}
             aria-label="Sửa vùng"
-            className="flex h-8 w-8 items-center justify-center rounded-xl text-slate-500 transition-colors hover:bg-slate-200 hover:text-slate-900"
+            className="flex h-9 w-9 items-center justify-center rounded-xl text-slate-500 transition-colors hover:bg-slate-200 hover:text-slate-900"
           >
             <Wrench size={16} />
           </Link>
-          <Button size="sm" variant="ghost" onClick={() => setAskReset(true)} className="text-red-300 hover:bg-red-500/10">
+          <Button size="sm" variant="ghost" onClick={() => setAskReset(true)} className="text-red-600 hover:bg-red-500/10">
             <RotateCcw size={16} />
-            <span className="hidden sm:inline">Tô lại từ đầu</span>
-            <span className="sr-only sm:hidden">Tô lại từ đầu</span>
+            <span>Tô lại từ đầu</span>
           </Button>
         </div>
+
+        {/* Điện thoại: một nút mở bảng, vùng bấm 44px */}
+        <Button
+          size="icon"
+          variant="ghost"
+          onClick={() => setShowMenu(true)}
+          aria-label="Thêm tuỳ chọn"
+          className="ml-auto h-11 w-11 sm:hidden"
+        >
+          <MoreHorizontal size={20} />
+        </Button>
       </motion.header>
 
       {/* vùng canvas — hàng `1fr` của grid, chiếm hết chỗ trống */}
-      <div ref={wrapRef} className="relative min-h-0 overflow-hidden">
+      {/*
+        `min-w-0` LÀ BẮT BUỘC, không phải cho gọn. Grid item mặc định
+        `min-width: auto` = min-content, và canvas bên trong có width TÍNH BẰNG
+        PIXEL (từ state `size`, khởi tạo 800). Không có min-w-0 thì canvas ép cột
+        grid rộng 800+, header giãn theo tới 1040px trên một màn 390px, và
+        ResizeObserver đo được 800 chứ không phải 390 — canvas không bao giờ co
+        lại được vì chính nó đang giữ cột rộng. Đúng lỗi "vào tô bị cắt".
+      */}
+      <div ref={wrapRef} className="relative min-h-0 min-w-0 overflow-hidden">
         {/*
           `key={resetCount}` buộc React GỠ và TẠO LẠI PaintCanvas mỗi lần "Tô lại
           từ đầu" được xác nhận, thay vì chỉ cập nhật props.
@@ -399,8 +437,15 @@ function PlayScreen({ puzzleId, puzzle, title }: { puzzleId: string; puzzle: Puz
           </motion.div>
         </div>
 
+        {/*
+          Gợi ý theo THIẾT BỊ: "con lăn" và "giữ Space" vô nghĩa trên điện thoại
+          và chiếm trọn một dòng ngay trên palette.
+        */}
         <p className="pointer-events-none absolute inset-x-0 bottom-1 text-center text-[11px] text-slate-400">
-          Hai ngón để kéo và phóng · con lăn để phóng · giữ Space rồi kéo
+          <span className="sm:hidden">Hai ngón để kéo và phóng</span>
+          <span className="hidden sm:inline">
+            Hai ngón để kéo và phóng · con lăn để phóng · giữ Space rồi kéo
+          </span>
         </p>
 
         <AnimatePresence>
@@ -442,7 +487,7 @@ function PlayScreen({ puzzleId, puzzle, title }: { puzzleId: string; puzzle: Puz
         initial={{ y: 20, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
         transition={{ type: 'spring', stiffness: 260, damping: 26 }}
-        className="z-10 border-t border-slate-200 bg-white/80 backdrop-blur-xl"
+        className="z-10 min-w-0 border-t border-slate-200 bg-white/80 backdrop-blur-xl"
       >
         {paint.saveError && (
           <p role="alert" className="px-3 pt-2 text-sm text-red-300">
@@ -461,6 +506,81 @@ function PlayScreen({ puzzleId, puzzle, title }: { puzzleId: string; puzzle: Puz
           onSelect={paint.selectColor}
         />
       </motion.div>
+
+      {/*
+        Bảng tuỳ chọn cho điện thoại. Chỉ render khi mở nên KHÔNG nhân đôi
+        accessible name với hàng nút desktop (vốn luôn có trong DOM).
+      */}
+      <AnimatePresence>
+        {showMenu && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            role="dialog"
+            aria-modal="true"
+            aria-label="Tuỳ chọn"
+            className="fixed inset-0 z-40 flex items-end bg-slate-900/40 sm:hidden"
+            onClick={() => setShowMenu(false)}
+          >
+            <motion.div
+              initial={{ y: '100%' }}
+              animate={{ y: 0 }}
+              exit={{ y: '100%' }}
+              transition={{ type: 'spring', stiffness: 320, damping: 32 }}
+              className="w-full rounded-t-xl2 border-t border-slate-200 bg-white p-3 pb-6"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-slate-300" />
+              <div className="grid gap-1">
+                <SheetItem
+                  icon={<Eye size={18} />}
+                  label={peek ? 'Ẩn ảnh gốc' : 'Xem ảnh gốc'}
+                  onClick={() => {
+                    setPeek((v) => !v)
+                    setShowMenu(false)
+                  }}
+                />
+                <SheetItem
+                  icon={muted ? <VolumeX size={18} /> : <Volume2 size={18} />}
+                  label={muted ? 'Bật tiếng tô' : 'Tắt tiếng tô'}
+                  onClick={() => {
+                    toggleMute()
+                    setShowMenu(false)
+                  }}
+                />
+                <SheetItem
+                  icon={bgm ? <Music size={18} /> : <Music2 size={18} />}
+                  label={bgm ? 'Tắt nhạc nền' : 'Bật nhạc nền'}
+                  onClick={() => {
+                    setBgm(!bgm)
+                    setShowMenu(false)
+                  }}
+                />
+                <SheetItem
+                  icon={<Share2 size={18} />}
+                  label="Chia sẻ"
+                  onClick={() => {
+                    setShowShare((v) => !v)
+                    setShowMenu(false)
+                  }}
+                />
+                <SheetLink icon={<Printer size={18} />} label="In" to={`/print/${puzzleId}`} />
+                <SheetLink icon={<Wrench size={18} />} label="Sửa vùng" to={`/edit/${puzzleId}`} />
+                <SheetItem
+                  icon={<RotateCcw size={18} />}
+                  label="Tô lại từ đầu"
+                  danger
+                  onClick={() => {
+                    setShowMenu(false)
+                    setAskReset(true)
+                  }}
+                />
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {askReset && (
         <ResetConfirmDialog
@@ -585,5 +705,48 @@ function ToolButton({
         <span className="sr-only sm:hidden">{label}</span>
       </span>
     </button>
+  )
+}
+
+/**
+ * Một dòng trong bảng tuỳ chọn điện thoại. Cao 48px — trên ngưỡng vùng bấm 44px
+ * mà hàng icon 32px của bản desktop không đạt.
+ */
+function SheetItem({
+  icon,
+  label,
+  onClick,
+  danger,
+}: {
+  icon: React.ReactNode
+  label: string
+  onClick: () => void
+  danger?: boolean
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn(
+        'flex h-12 items-center gap-3 rounded-xl px-3 text-left text-sm font-semibold',
+        'transition-colors active:bg-slate-100',
+        danger ? 'text-red-600' : 'text-slate-700',
+      )}
+    >
+      {icon}
+      {label}
+    </button>
+  )
+}
+
+function SheetLink({ icon, label, to }: { icon: React.ReactNode; label: string; to: string }) {
+  return (
+    <Link
+      to={to}
+      className="flex h-12 items-center gap-3 rounded-xl px-3 text-sm font-semibold text-slate-700 transition-colors active:bg-slate-100"
+    >
+      {icon}
+      {label}
+    </Link>
   )
 }
