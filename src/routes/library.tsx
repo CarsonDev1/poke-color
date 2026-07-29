@@ -1,3 +1,5 @@
+import { AnimatePresence, motion } from 'framer-motion'
+import { BarChart3, Brush, ImagePlus, Plus, Sparkles, Trash2 } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import {
@@ -10,8 +12,11 @@ import {
 import { SyncBanner } from '@/ui/components/sync-banner'
 import { useDialogFocus } from '@/ui/dialog-focus'
 import { useSync } from '@/ui/hooks/use-sync'
+import { Button } from '@/ui/primitives/button'
+import { Card } from '@/ui/primitives/card'
+import { Badge, PageTitle, ProgressBar, Shell, Skeleton } from '@/ui/primitives/misc'
 
-interface Card {
+interface CardData {
   rec: PuzzleRecord
   percent: number
   thumbUrl: string | null
@@ -19,7 +24,7 @@ interface Card {
 
 export default function LibraryRoute() {
   const sync = useSync()
-  const [cards, setCards] = useState<Card[] | null>(null)
+  const [cards, setCards] = useState<CardData[] | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [actionError, setActionError] = useState<string | null>(null)
   const [askDelete, setAskDelete] = useState<string | null>(null)
@@ -28,7 +33,7 @@ export default function LibraryRoute() {
   // đây không được kéo theo re-render.
   const madeRef = useRef<string[]>([])
 
-  const reload = async (): Promise<Card[]> => {
+  const reload = async (): Promise<CardData[]> => {
     const recs = await listPuzzles()
     return Promise.all(
       recs.map(async (rec) => {
@@ -97,93 +102,191 @@ export default function LibraryRoute() {
 
   if (loadError) {
     return (
-      <main style={{ padding: 24 }}>
-        {/*
-          Render CHÍNH `loadError` (đã chứa `e.message` thật, xem catch phía
-          trên) thay vì một câu chữ cứng cố định — trước đây `loadError` được
-          tính đúng nhưng không bao giờ được đọc ra ở đây, và câu cứng luôn
-          giả định lý do là chế độ duyệt riêng tư, sai với vd QuotaExceededError
-          (bộ nhớ đầy) hay các lỗi IndexedDB khác.
-        */}
-        <p role="alert" style={{ color: '#b91c1c' }}>
-          {loadError}
-        </p>
-        <Link to="/new">Tạo tranh mới</Link>
-      </main>
+      <Shell className="max-w-lg">
+        <Card className="p-6">
+          {/*
+            Render CHÍNH `loadError` (đã chứa `e.message` thật) thay vì một câu
+            chữ cứng — trước đây `loadError` được tính đúng nhưng không bao giờ
+            đọc ra ở đây, và câu cứng luôn giả định lý do là chế độ duyệt riêng
+            tư, sai với vd QuotaExceededError hay các lỗi IndexedDB khác.
+          */}
+          <p role="alert" className="text-red-300">
+            {loadError}
+          </p>
+          <Link to="/new" className="mt-4 inline-block text-aqua-400 hover:underline">
+            Tạo tranh mới
+          </Link>
+        </Card>
+      </Shell>
     )
   }
-  if (!cards) return <main style={{ padding: 24 }}>Đang tải…</main>
-
-  return (
-    <main style={{ maxWidth: 1100, margin: '0 auto', padding: 24 }}>
-      <SyncBanner state={sync} />
-      <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-        <h1>Thư viện tranh</h1>
-        <Link to="/stats" style={{ fontSize: 14 }}>
-          Thống kê
-        </Link>
-        {/*
-          Chỉ hiện link "Tạo tranh mới" ở header khi danh sách KHÔNG rỗng.
-          Khi rỗng, khối trạng thái rỗng bên dưới đã có link cùng tên rồi —
-          hiện cả hai cùng lúc tạo ra hai link trùng tên "Tạo tranh mới" trên
-          cùng một trang, khiến truy vấn theo role+tên (getByRole('link', {
-          name }) hay bất kỳ công cụ hỗ trợ nào dựa vào tên accessible) không
-          còn phân biệt được, và không thêm giá trị gì cho người dùng.
-        */}
-        {cards.length > 0 && <Link to="/new">Tạo tranh mới</Link>}
-      </header>
-
-      {cards.length === 0 ? (
-        <div style={{ padding: '3rem 0', textAlign: 'center', color: '#475569' }}>
-          <p>Chưa có tranh nào.</p>
-          <Link to="/new">Tạo tranh mới</Link>
-        </div>
-      ) : (
-        <ul
-          style={{
-            listStyle: 'none',
-            padding: 0,
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))',
-            gap: 16,
-          }}
-        >
-          {cards.map(({ rec, percent, thumbUrl }) => (
-            <li key={rec.id} style={{ border: '1px solid #e2e8f0', borderRadius: 12, overflow: 'hidden' }}>
-              <div style={{ aspectRatio: '4 / 3', display: 'grid', placeItems: 'center', background: '#f1f5f9' }}>
-                {thumbUrl ? (
-                  <img src={thumbUrl} alt={rec.title} style={{ maxWidth: '100%', maxHeight: '100%' }} />
-                ) : (
-                  <span style={{ color: '#94a3b8', fontSize: 13 }}>Chưa tô</span>
-                )}
-              </div>
-              <div style={{ padding: 12, display: 'grid', gap: 6 }}>
-                <h2 style={{ fontSize: 16, margin: 0 }}>{rec.title}</h2>
-                <small style={{ color: '#64748b' }}>
-                  {rec.regionCount} vùng · {rec.colorCount} màu · {percent}%
-                </small>
-                <div style={{ display: 'flex', gap: 8 }}>
-                  <Link to={`/play/${rec.id}`} aria-label={`Tô tranh ${rec.title}`}>
-                    Tô tranh
-                  </Link>
-                  <button type="button" onClick={() => setAskDelete(rec.id)}>
-                    Xoá
-                  </button>
-                </div>
-              </div>
+  if (!cards) {
+    return (
+      <Shell>
+        <div className="mb-6 h-9 w-56 animate-pulse rounded-xl bg-ink-800" />
+        <ul className="grid list-none grid-cols-[repeat(auto-fill,minmax(220px,1fr))] gap-4 p-0">
+          {[0, 1, 2, 3].map((i) => (
+            <li key={i}>
+              <Skeleton className="aspect-[4/3] w-full" />
             </li>
           ))}
         </ul>
+      </Shell>
+    )
+  }
+
+  return (
+    <Shell>
+      <SyncBanner state={sync} />
+
+      <motion.header
+        initial={{ opacity: 0, y: -12 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ type: 'spring', stiffness: 260, damping: 26 }}
+        className="mb-6 flex flex-wrap items-center justify-between gap-3"
+      >
+        <div>
+          <PageTitle>Thư viện tranh</PageTitle>
+          <p className="mt-1 text-sm text-ink-400">
+            {cards.length > 0
+              ? `${cards.length} tranh · ${cards.filter((c) => c.percent === 100).length} đã hoàn thành`
+              : 'Tải một bức tranh lên để bắt đầu'}
+          </p>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <Link to="/stats">
+            <Button variant="ghost" size="sm">
+              <BarChart3 size={16} />
+              Thống kê
+            </Button>
+          </Link>
+          {/*
+            Chỉ hiện "Tạo tranh mới" ở header khi danh sách KHÔNG rỗng. Khi rỗng,
+            khối trạng thái rỗng bên dưới đã có link cùng tên — hiện cả hai tạo ra
+            hai link trùng tên trên một trang, khiến truy vấn theo role+tên (và
+            mọi công cụ hỗ trợ dựa vào accessible name) không phân biệt được.
+          */}
+          {cards.length > 0 && (
+            <Link to="/new">
+              <Button variant="primary" size="sm">
+                <Plus size={16} />
+                Tạo tranh mới
+              </Button>
+            </Link>
+          )}
+        </div>
+      </motion.header>
+
+      {cards.length === 0 ? (
+        <motion.div
+          initial={{ opacity: 0, scale: 0.96 }}
+          animate={{ opacity: 1, scale: 1 }}
+          className="grid place-items-center py-16"
+        >
+          <Card className="max-w-sm p-8 text-center">
+            <div className="mx-auto mb-4 grid h-16 w-16 animate-float place-items-center rounded-2xl bg-neon-500/15 text-neon-400">
+              <ImagePlus size={28} />
+            </div>
+            <h2 className="font-display mb-1 text-lg font-bold text-white">Chưa có tranh nào</h2>
+            <p className="mb-5 text-sm text-ink-400">
+              Tải ảnh lên, app sẽ tự chia thành vùng có số để bạn tô.
+            </p>
+            <Link to="/new">
+              <Button variant="primary" size="lg" className="w-full">
+                <Plus size={18} />
+                Tạo tranh mới
+              </Button>
+            </Link>
+          </Card>
+        </motion.div>
+      ) : (
+        <ul className="grid list-none grid-cols-[repeat(auto-fill,minmax(220px,1fr))] gap-4 p-0">
+          <AnimatePresence mode="popLayout">
+            {cards.map(({ rec, percent, thumbUrl }, i) => (
+              <motion.li
+                key={rec.id}
+                layout
+                initial={{ opacity: 0, y: 16 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.9 }}
+                /*
+                  Trễ theo thứ tự thẻ, nhưng KẸP ở 6 thẻ đầu: không kẹp thì với 30
+                  tranh, thẻ cuối phải đợi 1.2s mới xuất hiện — trông như app treo
+                  chứ không phải hiệu ứng.
+                */
+                transition={{ delay: Math.min(i, 6) * 0.05, type: 'spring', stiffness: 260, damping: 26 }}
+              >
+                <Card className="group h-full overflow-hidden">
+                  <div className="relative grid aspect-[4/3] place-items-center overflow-hidden bg-ink-950/60">
+                    {thumbUrl ? (
+                      <img
+                        src={thumbUrl}
+                        alt={rec.title}
+                        className="max-h-full max-w-full transition-transform duration-300 group-hover:scale-105"
+                      />
+                    ) : (
+                      <span className="text-xs text-ink-600">Chưa tô</span>
+                    )}
+
+                    {percent === 100 && (
+                      <Badge tone="sun" className="absolute left-2 top-2">
+                        <Sparkles size={11} />
+                        Hoàn thành
+                      </Badge>
+                    )}
+                  </div>
+
+                  <div className="grid gap-2 p-3">
+                    <h2 className="font-display truncate text-base font-bold text-white">
+                      {rec.title}
+                    </h2>
+                    <ProgressBar value={percent / 100} />
+                    <small className="text-xs text-ink-400">
+                      {rec.regionCount} vùng · {rec.colorCount} màu · {percent}%
+                    </small>
+                    <div className="mt-1 flex gap-2">
+                      <Link to={`/play/${rec.id}`} aria-label={`Tô tranh ${rec.title}`} className="flex-1">
+                        <Button variant="primary" size="sm" className="w-full">
+                          <Brush size={15} />
+                          Tô tranh
+                        </Button>
+                      </Link>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        /*
+                          Đặt tên trong ngoặc kép để KHÔNG trùng accessible name
+                          với nút "Xoá tranh" trong hộp thoại xác nhận: một tranh
+                          tên "Tranh" sẽ cho ra đúng chuỗi đó, và hai nút cùng tên
+                          trên một trang khiến người dùng screen reader nghe y hệt
+                          nhau mà không biết cái nào mở hộp thoại, cái nào xoá thật.
+                        */
+                        aria-label={`Xoá "${rec.title}"`}
+                        onClick={() => setAskDelete(rec.id)}
+                        className="h-8 w-8 text-ink-400 hover:bg-red-500/10 hover:text-red-300"
+                      >
+                        <Trash2 size={15} />
+                      </Button>
+                    </div>
+                  </div>
+                </Card>
+              </motion.li>
+            ))}
+          </AnimatePresence>
+        </ul>
       )}
 
-      {askDelete && (
-        <DeleteConfirmDialog
-          actionError={actionError}
-          onConfirm={() => void remove(askDelete)}
-          onCancel={() => setAskDelete(null)}
-        />
-      )}
-    </main>
+      <AnimatePresence>
+        {askDelete && (
+          <DeleteConfirmDialog
+            actionError={actionError}
+            onConfirm={() => void remove(askDelete)}
+            onCancel={() => setAskDelete(null)}
+          />
+        )}
+      </AnimatePresence>
+    </Shell>
   )
 }
 
@@ -212,21 +315,41 @@ function DeleteConfirmDialog({
   // Escape = huỷ (không xác nhận xoá) — giống hành vi "Huỷ", không phải "Xoá tranh"
   const confirmRef = useDialogFocus<HTMLButtonElement>(onCancel)
   return (
-    <div role="dialog" aria-modal="true" aria-label="Xác nhận xoá" style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,.6)', display: 'grid', placeItems: 'center' }}>
-      <div style={{ background: '#fff', padding: 20, borderRadius: 12 }}>
-        <p>Xoá tranh này cùng toàn bộ tiến độ?</p>
-        {actionError && (
-          <p role="alert" style={{ color: '#b91c1c' }}>
-            {actionError}
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      role="dialog"
+      aria-modal="true"
+      aria-label="Xác nhận xoá"
+      className="fixed inset-0 z-30 grid place-items-center bg-ink-950/70 p-4 backdrop-blur-sm"
+    >
+      <motion.div
+        initial={{ scale: 0.9, y: 12 }}
+        animate={{ scale: 1, y: 0 }}
+        exit={{ scale: 0.95, opacity: 0 }}
+        transition={{ type: 'spring', stiffness: 320, damping: 26 }}
+      >
+        <Card className="max-w-sm p-6">
+          <h2 className="font-display mb-1 text-lg font-bold text-white">Xoá tranh này?</h2>
+          <p className="mb-4 text-sm text-ink-400">
+            Cả tranh và toàn bộ tiến độ tô sẽ bị xoá. Không hoàn tác được.
           </p>
-        )}
-        <button ref={confirmRef} type="button" onClick={onConfirm}>
-          Xoá tranh
-        </button>{' '}
-        <button type="button" onClick={onCancel}>
-          Huỷ
-        </button>
-      </div>
-    </div>
+          {actionError && (
+            <p role="alert" className="mb-4 rounded-xl bg-red-500/10 p-3 text-sm text-red-300">
+              {actionError}
+            </p>
+          )}
+          <div className="flex justify-end gap-2">
+            <Button variant="ghost" onClick={onCancel}>
+              Huỷ
+            </Button>
+            <Button ref={confirmRef} variant="danger" onClick={onConfirm}>
+              Xoá tranh
+            </Button>
+          </div>
+        </Card>
+      </motion.div>
+    </motion.div>
   )
 }
