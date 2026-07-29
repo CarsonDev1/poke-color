@@ -1,4 +1,4 @@
-import { createClient, type SupabaseClient } from '@supabase/supabase-js'
+import type { SupabaseClient } from '@supabase/supabase-js'
 
 export interface SupabaseConfig {
   url: string
@@ -40,14 +40,26 @@ export function readSupabaseConfig(env: Record<string, string | undefined>): Sup
 let client: SupabaseClient | null = null
 
 /**
- * Client dùng chung, tạo lazy.
+ * Client dùng chung, tạo lazy VÀ nạp code lazy.
  *
- * Lazy có chủ đích: tạo lúc import module sẽ làm MỌI test import gián tiếp file
- * này bị vỡ trong môi trường không có biến env, dù test đó chẳng gọi mạng.
+ * `import()` động chứ không import tĩnh: `@supabase/supabase-js` nặng ~209 KB
+ * (54 KB gzip). App chạy trọn vẹn khi CHƯA đăng nhập — dữ liệu ở IndexedDB —
+ * nên bắt mọi khách tải SDK auth mà phần lớn không dùng là vô lý, nhất là trên
+ * điện thoại (R3). Import tĩnh đẩy bundle từ 327 KB lên 536 KB.
+ *
+ * Lazy ở mức INSTANCE cũng có chủ đích: tạo client lúc import module sẽ làm MỌI
+ * test import gián tiếp file này bị vỡ khi không có biến env, dù test đó chẳng
+ * gọi mạng.
  */
-export function getSupabase(): SupabaseClient {
+export async function getSupabase(): Promise<SupabaseClient> {
   if (client) return client
   const cfg = readSupabaseConfig(import.meta.env as unknown as Record<string, string | undefined>)
+  const { createClient } = await import('@supabase/supabase-js')
+  // Kiểm lại: một lời gọi song song có thể đã tạo client xong trong lúc `await`
+  // ở trên đang chờ. Không kiểm là tạo hai client, mỗi cái một GoTrueClient
+  // nghe cùng một khoá localStorage — supabase-js sẽ cảnh báo và việc refresh
+  // token trở nên bấp bênh.
+  if (client) return client
   client = createClient(cfg.url, cfg.publishableKey, {
     auth: {
       // magic link trả về qua URL fragment; app dùng hash routing nên phải tự
