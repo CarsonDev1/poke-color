@@ -29,6 +29,7 @@ import {
 } from '@/data/local-cache'
 import { rgbCss } from '@/render/layers'
 import { useDialogFocus } from '@/ui/dialog-focus'
+import { AmbientBackground } from '@/ui/components/decor'
 import { Button } from '@/ui/primitives/button'
 import { Card } from '@/ui/primitives/card'
 import { Badge, PageTitle, Shell } from '@/ui/primitives/misc'
@@ -242,7 +243,7 @@ export default function EditRoute() {
       <Shell className="max-w-lg">
         <Card className="flex items-center gap-3 p-6">
           <Loader2 className="animate-spin text-neon-400" size={20} />
-          <span className="text-ink-400">Đang tải tranh…</span>
+          <span className="text-slate-500">Đang tải tranh…</span>
         </Card>
       </Shell>
     )
@@ -253,6 +254,7 @@ export default function EditRoute() {
 
   return (
     <Shell className="max-w-4xl">
+      <AmbientBackground seed={id} />
       <motion.header
         initial={{ opacity: 0, y: -12 }}
         animate={{ opacity: 1, y: 0 }}
@@ -260,7 +262,7 @@ export default function EditRoute() {
       >
         <div>
           <PageTitle>Sửa vùng</PageTitle>
-          <p className="mt-1 text-sm text-ink-400">{base.rec.title}</p>
+          <p className="mt-1 text-sm text-slate-500">{base.rec.title}</p>
         </div>
         <div className="flex items-center gap-2">
           <Badge tone="aqua">{p.regions.length} vùng</Badge>
@@ -274,8 +276,8 @@ export default function EditRoute() {
         </div>
       </motion.header>
 
-      <Card className="mb-3 p-3 text-sm text-ink-400">
-        Bấm một vùng để chọn, bấm vùng thứ hai <strong className="text-ink-200">kề nó</strong> để
+      <Card className="mb-3 p-3 text-sm text-slate-500">
+        Bấm một vùng để chọn, bấm vùng thứ hai <strong className="text-slate-700">kề nó</strong> để
         gộp lại. Vùng đang chọn hiện màu vàng.
       </Card>
 
@@ -313,7 +315,7 @@ export default function EditRoute() {
           Làm lại
         </Button>
 
-        <span className="ml-2 flex items-center gap-2 text-sm text-ink-400">
+        <span className="ml-2 flex items-center gap-2 text-sm text-slate-500">
           Gộp vùng nhỏ hơn
           <input
             aria-label="Ngưỡng diện tích"
@@ -322,7 +324,7 @@ export default function EditRoute() {
             max={5000}
             value={smallThreshold}
             onChange={(e) => setSmallThreshold(Number(e.target.value))}
-            className="w-20 rounded-lg border border-ink-700 bg-ink-950/60 px-2 py-1 text-white outline-none focus:border-aqua-400"
+            className="w-20 rounded-lg border border-slate-300 bg-white px-2 py-1 text-slate-900 outline-none focus:border-aqua-400"
           />
           px
         </span>
@@ -346,7 +348,7 @@ export default function EditRoute() {
 
       {selected !== null && (
         <Card className="mb-3 p-4">
-          <p className="mb-2 text-sm font-bold text-white">Đổi màu vùng {selected}</p>
+          <p className="mb-2 text-sm font-bold text-slate-900">Đổi màu vùng {selected}</p>
           <div className="flex flex-wrap gap-1.5">
             {p.palette.map((c, i) => (
               <button
@@ -357,14 +359,14 @@ export default function EditRoute() {
                   run({ kind: 'color', region: selected, colorIndex: i })
                   setSelected(null)
                 }}
-                className="w-11 rounded-lg border border-ink-700 bg-ink-850 p-1 transition-colors hover:border-aqua-400"
+                className="w-11 rounded-lg border border-slate-300 bg-slate-100 p-1 transition-colors hover:border-aqua-400"
               >
                 <span
                   aria-hidden
                   className="block h-5 rounded"
                   style={{ background: rgbCss(c) }}
                 />
-                <span className="font-mono text-[11px] text-ink-200">{colorLabel(i)}</span>
+                <span className="font-mono text-[11px] text-slate-700">{colorLabel(i)}</span>
               </button>
             ))}
           </div>
@@ -411,7 +413,7 @@ function ConfirmSave({ onCancel, onConfirm }: { onCancel: () => void; onConfirm:
       role="dialog"
       aria-modal="true"
       aria-label="Xác nhận lưu thay đổi"
-      className="fixed inset-0 z-30 grid place-items-center bg-ink-950/70 p-4 backdrop-blur-sm"
+      className="fixed inset-0 z-30 grid place-items-center bg-slate-900/55 p-4 backdrop-blur-sm"
     >
       <motion.div
         initial={{ scale: 0.9, y: 12 }}
@@ -420,8 +422,8 @@ function ConfirmSave({ onCancel, onConfirm }: { onCancel: () => void; onConfirm:
         transition={{ type: 'spring', stiffness: 320, damping: 26 }}
       >
         <Card className="max-w-sm p-6">
-          <h2 className="font-display mb-1 text-lg font-bold text-white">Lưu sẽ XOÁ tiến độ tô</h2>
-          <p className="mb-5 text-sm text-ink-400">
+          <h2 className="font-display mb-1 text-lg font-bold text-slate-900">Lưu sẽ XOÁ tiến độ tô</h2>
+          <p className="mb-5 text-sm text-slate-500">
             Sửa vùng làm số hiệu các vùng thay đổi, nên tiến độ tô hiện tại không còn khớp và sẽ bị
             xoá. Bạn sẽ tô lại từ đầu.
           </p>

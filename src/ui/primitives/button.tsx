@@ -20,11 +20,11 @@ const buttonVariants = cva(
       variant: {
         primary:
           'bg-neon-500 text-white hover:bg-neon-400 shadow-[0_6px_20px_-6px_oklch(0.7_0.23_340_/_0.7)]',
-        secondary: 'bg-ink-800 text-ink-200 hover:bg-ink-700 border border-ink-700',
-        ghost: 'bg-transparent text-ink-200 hover:bg-ink-800',
+        secondary: 'bg-slate-200 text-slate-700 hover:bg-slate-300 border border-slate-300',
+        ghost: 'bg-transparent text-slate-700 hover:bg-slate-200',
         danger: 'bg-red-500/90 text-white hover:bg-red-500',
         aqua:
-          'bg-aqua-500 text-ink-950 hover:bg-aqua-400 shadow-[0_6px_20px_-6px_oklch(0.75_0.16_200_/_0.7)]',
+          'bg-aqua-500 text-slate-900 hover:bg-aqua-400 shadow-[0_6px_20px_-6px_oklch(0.75_0.16_200_/_0.7)]',
       },
       size: {
         sm: 'h-8 px-3 text-sm',

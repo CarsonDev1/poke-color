@@ -73,7 +73,7 @@ export default function StatsRoute() {
   if (!stats || !t) {
     return (
       <Shell>
-        <div className="mb-6 h-9 w-40 animate-pulse rounded-xl bg-ink-800" />
+        <div className="mb-6 h-9 w-40 animate-pulse rounded-xl bg-slate-200" />
         <div className="grid grid-cols-[repeat(auto-fit,minmax(150px,1fr))] gap-3">
           {[0, 1, 2, 3].map((i) => (
             <Skeleton key={i} className="h-24" />
@@ -115,9 +115,9 @@ export default function StatsRoute() {
       </section>
 
       <section>
-        <h2 className="font-display mb-3 text-lg font-bold text-white">Theo từng tranh</h2>
+        <h2 className="font-display mb-3 text-lg font-bold text-slate-900">Theo từng tranh</h2>
         {metrics.length === 0 ? (
-          <Card className="p-6 text-center text-sm text-ink-400">
+          <Card className="p-6 text-center text-sm text-slate-500">
             Chưa có tranh nào.{' '}
             <Link to="/new" className="text-aqua-400 hover:underline">
               Tạo tranh mới
@@ -160,7 +160,7 @@ export default function StatsRoute() {
         )}
       </section>
 
-      <p className="mt-6 text-xs text-ink-600">Số liệu tính từ dữ liệu trong máy này.</p>
+      <p className="mt-6 text-xs text-slate-400">Số liệu tính từ dữ liệu trong máy này.</p>
     </Shell>
   )
 }
@@ -186,13 +186,13 @@ function StatCard({
       transition={{ delay, type: 'spring', stiffness: 260, damping: 26 }}
     >
       <Card className="p-4">
-        <div className="mb-2 flex items-center gap-2 text-ink-400">
+        <div className="mb-2 flex items-center gap-2 text-slate-500">
           {icon}
           <span className="text-xs font-semibold">{label}</span>
         </div>
         {/* tabular-nums: số không nhảy ngang khi giá trị đổi độ dài */}
-        <div className="font-display text-2xl font-extrabold tabular-nums text-white">{value}</div>
-        {hint && <div className="mt-0.5 text-[11px] text-ink-600">{hint}</div>}
+        <div className="font-display text-2xl font-extrabold tabular-nums text-slate-900">{value}</div>
+        {hint && <div className="mt-0.5 text-[11px] text-slate-400">{hint}</div>}
       </Card>
     </motion.div>
   )
@@ -200,11 +200,11 @@ function StatCard({
 
 function Th({ children }: { children: React.ReactNode }) {
   return (
-    <th className="border-b border-ink-800 px-3 py-2 text-left text-xs font-bold text-ink-400">
+    <th className="border-b border-slate-200 px-3 py-2 text-left text-xs font-bold text-slate-500">
       {children}
     </th>
   )
 }
 function Td({ children }: { children: React.ReactNode }) {
-  return <td className="border-b border-ink-800/60 px-3 py-2 text-ink-200">{children}</td>
+  return <td className="border-b border-slate-200/70 px-3 py-2 text-slate-700">{children}</td>
 }

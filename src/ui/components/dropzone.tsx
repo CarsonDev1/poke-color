@@ -68,21 +68,21 @@ export function Dropzone({
           'transition-[colors,transform] duration-200 hover:scale-[1.01] active:scale-[0.99]',
           dragging
             ? 'border-neon-400 bg-neon-500/10 shadow-glow'
-            : 'border-ink-700 bg-ink-900/50 hover:border-ink-600',
+            : 'border-slate-300 bg-white/70 hover:border-slate-400',
         )}
       >
         <div
           className={cn(
             'mx-auto mb-4 grid h-16 w-16 place-items-center rounded-2xl transition-colors',
-            dragging ? 'bg-neon-500/25 text-neon-400' : 'bg-ink-800 text-ink-400',
+            dragging ? 'bg-neon-500/25 text-neon-400' : 'bg-slate-200 text-slate-500',
           )}
         >
           <ImagePlus size={28} className={dragging ? undefined : 'animate-float'} />
         </div>
-        <span className="font-display block text-base font-bold text-white">
+        <span className="font-display block text-base font-bold text-slate-900">
           {dragging ? 'Thả ảnh vào đây' : 'Kéo ảnh vào đây, hoặc bấm để chọn ảnh'}
         </span>
-        <span className="mt-1.5 block text-sm text-ink-400">
+        <span className="mt-1.5 block text-sm text-slate-500">
           PNG, JPG hoặc WebP · tối đa 15 MB
         </span>
         <input

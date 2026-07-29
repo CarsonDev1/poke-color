@@ -10,8 +10,10 @@ export function Card({ className, ...props }: HTMLMotionProps<'div'>) {
   return (
     <motion.div
       className={cn(
-        'rounded-xl2 border border-ink-800/80 bg-ink-900/60 backdrop-blur-xl',
-        'shadow-[0_16px_50px_-24px_oklch(0.16_0.03_275_/_0.9)]',
+        // 90% chu khong phai 78%: the phai du duc de chu trong no net tren mot nen
+        // anh dang hien ro. Van chua ha het de con thay lop nen ben duoi.
+        'rounded-xl2 border border-slate-200/80 bg-white/90 backdrop-blur-xl',
+        'shadow-card',
         className,
       )}
       {...props}
@@ -26,14 +28,14 @@ export function CardHeader({ className, ...props }: React.ComponentProps<'div'>)
 export function CardTitle({ className, ...props }: React.ComponentProps<'h3'>) {
   return (
     <h3
-      className={cn('font-display text-lg font-bold tracking-tight text-white', className)}
+      className={cn('font-display text-lg font-bold tracking-tight text-slate-900', className)}
       {...props}
     />
   )
 }
 
 export function CardDescription({ className, ...props }: React.ComponentProps<'p'>) {
-  return <p className={cn('text-sm text-ink-400', className)} {...props} />
+  return <p className={cn('text-sm text-slate-500', className)} {...props} />
 }
 
 export function CardContent({ className, ...props }: React.ComponentProps<'div'>) {

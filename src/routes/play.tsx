@@ -22,7 +22,7 @@ import type { Puzzle } from '@/core/types'
 import { listPuzzles, loadOriginal, loadPuzzle, saveThumbnail } from '@/data/local-cache'
 import { BackgroundMusic, useBgmEnabled } from '@/ui/components/bgm'
 import { CompletionBanner } from '@/ui/components/completion-banner'
-import { CelebrationBurst } from '@/ui/components/decor'
+import { AmbientBackground } from '@/ui/components/decor'
 import { PaintCanvas } from '@/ui/components/paint-canvas'
 import { PaletteBar } from '@/ui/components/palette-bar'
 import { SharePanel } from '@/ui/components/share-panel'
@@ -86,7 +86,7 @@ export default function PlayRoute() {
       <Shell className="max-w-lg">
         <Card className="flex items-center gap-3 p-6">
           <Loader2 className="animate-spin text-neon-400" size={20} />
-          <span className="text-ink-400">Đang tải tranh…</span>
+          <span className="text-slate-500">Đang tải tranh…</span>
         </Card>
       </Shell>
     )
@@ -111,7 +111,6 @@ function PlayScreen({ puzzleId, puzzle, title }: { puzzleId: string; puzzle: Puz
   const [tool, setTool] = useState<'paint' | 'pan'>('paint')
   const [bgm, setBgm] = useBgmEnabled()
   const [showDone, setShowDone] = useState(false)
-  const [burst, setBurst] = useState(false)
   // Nội dung của vùng aria-live dùng chung — cập nhật bởi CẢ hai nguồn: đổi
   // sau mỗi lượt tô (`paint.announcement`, đã có sẵn) LẪN đổi mỗi khi con trỏ
   // vùng của bàn phím di chuyển (I7). Tin nhắn mới nhất luôn thắng, đúng như
@@ -187,10 +186,7 @@ function PlayScreen({ puzzleId, puzzle, title }: { puzzleId: string; puzzle: Puz
   }, [puzzleId])
 
   useEffect(() => {
-    if (paint.isComplete) {
-      setShowDone(true)
-      setBurst(true)
-    }
+    if (paint.isComplete) setShowDone(true)
   }, [paint.isComplete])
 
   // Đẩy thông báo tiến độ (đã có sẵn) vào vùng aria-live dùng chung — bỏ qua
@@ -277,28 +273,30 @@ function PlayScreen({ puzzleId, puzzle, title }: { puzzleId: string; puzzle: Puz
       browser mobile co giãn và `vh` sẽ tính theo lúc nó đang ẩn.
     */
     <div className="grid h-[100dvh] grid-rows-[auto_1fr_auto] overflow-hidden">
+      {/* nen anime doi moi 5 phut — hien qua header/dock trong mo */}
+      <AmbientBackground seed={puzzleId} />
       <motion.header
         initial={{ y: -16, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
         transition={{ type: 'spring', stiffness: 260, damping: 26 }}
-        className="z-10 flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-ink-800/70 bg-ink-900/70 px-3 py-2 backdrop-blur-xl sm:px-4"
+        className="z-10 flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-slate-200 bg-white/80 px-3 py-2 backdrop-blur-xl sm:px-4"
       >
         <Link
           to="/library"
           aria-label="Về thư viện"
-          className="flex h-9 w-9 items-center justify-center rounded-xl text-ink-400 transition-colors hover:bg-ink-800 hover:text-white"
+          className="flex h-9 w-9 items-center justify-center rounded-xl text-slate-500 transition-colors hover:bg-slate-200 hover:text-slate-900"
         >
           <ArrowLeft size={18} />
         </Link>
 
-        <strong className="font-display max-w-[10rem] truncate text-base text-white sm:max-w-xs sm:text-lg">
+        <strong className="font-display max-w-[10rem] truncate text-base text-slate-900 sm:max-w-xs sm:text-lg">
           {title}
         </strong>
 
         {/* Tiến độ là thông tin quan trọng nhất trên màn này ⇒ đặt ngay cạnh tên */}
         <div className="flex min-w-[8rem] flex-1 items-center gap-2 sm:min-w-[12rem]">
           <ProgressBar value={paint.progress} className="flex-1" />
-          <span className="tabular-nums text-xs font-semibold text-ink-400">
+          <span className="tabular-nums text-xs font-semibold text-slate-500">
             {paint.filledCount} / {puzzle.regions.length}
           </span>
           <Badge tone={pct === 100 ? 'sun' : 'neon'}>{pct}%</Badge>
@@ -333,14 +331,14 @@ function PlayScreen({ puzzleId, puzzle, title }: { puzzleId: string; puzzle: Puz
           <Link
             to={`/print/${puzzleId}`}
             aria-label="In"
-            className="flex h-8 w-8 items-center justify-center rounded-xl text-ink-400 transition-colors hover:bg-ink-800 hover:text-white"
+            className="flex h-8 w-8 items-center justify-center rounded-xl text-slate-500 transition-colors hover:bg-slate-200 hover:text-slate-900"
           >
             <Printer size={16} />
           </Link>
           <Link
             to={`/edit/${puzzleId}`}
             aria-label="Sửa vùng"
-            className="flex h-8 w-8 items-center justify-center rounded-xl text-ink-400 transition-colors hover:bg-ink-800 hover:text-white"
+            className="flex h-8 w-8 items-center justify-center rounded-xl text-slate-500 transition-colors hover:bg-slate-200 hover:text-slate-900"
           >
             <Wrench size={16} />
           </Link>
@@ -393,7 +391,7 @@ function PlayScreen({ puzzleId, puzzle, title }: { puzzleId: string; puzzle: Puz
             transition={{ delay: 0.1 }}
             role="group"
             aria-label="Công cụ"
-            className="pointer-events-auto flex items-center gap-1 rounded-full border border-ink-700/70 bg-ink-900/80 p-1 backdrop-blur-xl"
+            className="pointer-events-auto flex items-center gap-1 rounded-full border border-slate-300/70 bg-white/90 p-1 shadow-card backdrop-blur-xl"
           >
             <ToolButton active={tool === 'paint'} onClick={() => setTool('paint')} label="Tô màu">
               <Brush size={15} />
@@ -404,7 +402,7 @@ function PlayScreen({ puzzleId, puzzle, title }: { puzzleId: string; puzzle: Puz
           </motion.div>
         </div>
 
-        <p className="pointer-events-none absolute inset-x-0 bottom-1 text-center text-[11px] text-ink-600">
+        <p className="pointer-events-none absolute inset-x-0 bottom-1 text-center text-[11px] text-slate-400">
           Hai ngón để kéo và phóng · con lăn để phóng · giữ Space rồi kéo
         </p>
 
@@ -447,7 +445,7 @@ function PlayScreen({ puzzleId, puzzle, title }: { puzzleId: string; puzzle: Puz
         initial={{ y: 20, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
         transition={{ type: 'spring', stiffness: 260, damping: 26 }}
-        className="z-10 border-t border-ink-800/70 bg-ink-900/70 backdrop-blur-xl"
+        className="z-10 border-t border-slate-200 bg-white/80 backdrop-blur-xl"
       >
         {paint.saveError && (
           <p role="alert" className="px-3 pt-2 text-sm text-red-300">
@@ -479,11 +477,6 @@ function PlayScreen({ puzzleId, puzzle, title }: { puzzleId: string; puzzle: Puz
         />
       )}
 
-      {/*
-        Burst chi chay MOT luot roi tu tat (`burst` ve false), khong lap: hieu ung
-        an mung lap vo han se che mat chinh buc tranh nguoi choi vua hoan thanh.
-      */}
-      <CelebrationBurst running={burst} onDone={() => setBurst(false)} />
 
       {/*
         Nhạc nền — iframe ẩn, tự dừng khi rời màn (React gỡ component). Đặt ở
@@ -520,7 +513,7 @@ function ResetConfirmDialog({
       role="dialog"
       aria-modal="true"
       aria-label="Xác nhận tô lại"
-      className="fixed inset-0 z-30 grid place-items-center bg-ink-950/70 p-4 backdrop-blur-sm"
+      className="fixed inset-0 z-30 grid place-items-center bg-slate-900/55 p-4 backdrop-blur-sm"
     >
       <motion.div
         initial={{ scale: 0.9, y: 12 }}
@@ -528,8 +521,8 @@ function ResetConfirmDialog({
         transition={{ type: 'spring', stiffness: 320, damping: 26 }}
       >
         <Card className="max-w-sm p-6">
-          <h2 className="font-display mb-1 text-lg font-bold text-white">Tô lại từ đầu?</h2>
-          <p className="mb-5 text-sm text-ink-400">
+          <h2 className="font-display mb-1 text-lg font-bold text-slate-900">Tô lại từ đầu?</h2>
+          <p className="mb-5 text-sm text-slate-500">
             Toàn bộ tiến độ của tranh này sẽ bị xoá. Không hoàn tác được.
           </p>
           <div className="flex justify-end gap-2">
@@ -574,7 +567,7 @@ function ToolButton({
       onClick={onClick}
       className={cn(
         'relative flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold transition-colors',
-        active ? 'text-ink-950' : 'text-ink-400 hover:text-white',
+        active ? 'text-slate-900' : 'text-slate-500 hover:text-slate-900',
       )}
     >
       {/*

@@ -8,6 +8,7 @@ import type { PuzzleRecord } from '@/data/local-cache'
 import { gunzip } from '@/data/compress'
 import { loadBlobs, loadPuzzleRecord } from '@/data/local-cache'
 import { vectorizeInWorker } from '@/data/vectorize-client'
+import { AmbientBackground } from '@/ui/components/decor'
 import { Button } from '@/ui/primitives/button'
 import { Card } from '@/ui/primitives/card'
 import { PageTitle, Shell } from '@/ui/primitives/misc'
@@ -121,8 +122,8 @@ export default function PrintRoute() {
         <Card className="flex items-center gap-3 p-6">
           <Loader2 className="animate-spin text-neon-400" size={20} />
           <div>
-            <p className="font-semibold text-white">Đang chuyển tranh sang dạng vector…</p>
-            <p className="text-sm text-ink-400">Tranh nhiều vùng có thể mất vài chục giây.</p>
+            <p className="font-semibold text-slate-900">Đang chuyển tranh sang dạng vector…</p>
+            <p className="text-sm text-slate-500">Tranh nhiều vùng có thể mất vài chục giây.</p>
           </div>
         </Card>
       </Shell>
@@ -134,6 +135,8 @@ export default function PrintRoute() {
       <style>{PRINT_CSS}</style>
 
       <Shell className="screen-only max-w-4xl">
+        {/* screen-only: @media print an ca khoi nay nen nen khong len giay */}
+        <AmbientBackground seed="print" />
         <motion.header
           initial={{ opacity: 0, y: -12 }}
           animate={{ opacity: 1, y: 0 }}
@@ -150,7 +153,7 @@ export default function PrintRoute() {
 
         <Card className="mb-4 p-4">
           <fieldset className="m-0 border-0 p-0">
-            <legend className="mb-2 text-sm font-bold text-white">Khổ in</legend>
+            <legend className="mb-2 text-sm font-bold text-slate-900">Khổ in</legend>
             <div className="grid gap-2 sm:grid-cols-2">
               {([
                 ['one', 'Vừa 1 trang A4', 'Cả tranh trên một tờ'],
@@ -162,7 +165,7 @@ export default function PrintRoute() {
                     'cursor-pointer rounded-xl border-2 p-3 transition-colors ' +
                     (layout === key
                       ? 'border-neon-400 bg-neon-500/12'
-                      : 'border-ink-700 bg-ink-950/40 hover:border-ink-600')
+                      : 'border-slate-300 bg-slate-50 hover:border-slate-400')
                   }
                 >
                   <input
@@ -172,14 +175,14 @@ export default function PrintRoute() {
                     onChange={() => setLayout(key)}
                     className="sr-only"
                   />
-                  <span className="block text-sm font-bold text-white">{label}</span>
-                  <span className="block text-[11px] text-ink-400">{hint}</span>
+                  <span className="block text-sm font-bold text-slate-900">{label}</span>
+                  <span className="block text-[11px] text-slate-500">{hint}</span>
                 </label>
               ))}
             </div>
           </fieldset>
 
-          <label className="mt-4 flex cursor-pointer items-center gap-2 text-sm text-ink-200">
+          <label className="mt-4 flex cursor-pointer items-center gap-2 text-sm text-slate-700">
             <input
               type="checkbox"
               checked={withSolution}
@@ -205,7 +208,7 @@ export default function PrintRoute() {
           </Button>
         </div>
 
-        <p className="text-sm text-ink-400">Xem trước bên dưới đúng như khi in.</p>
+        <p className="text-sm text-slate-500">Xem trước bên dưới đúng như khi in.</p>
       </Shell>
 
       {/* ------------------------- phần được in ------------------------- */}

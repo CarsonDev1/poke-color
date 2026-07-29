@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { fireEvent, render } from '@testing-library/react'
-import { AmbientBackground, CelebrationBurst, FloatingAccents } from '@/ui/components/decor'
+import { fireEvent, render, waitFor } from '@testing-library/react'
+import { AmbientBackground, BG_ROTATE_MS } from '@/ui/components/decor'
 
 /** mọi ảnh trang trí trong document, kể cả cái đang ẩn */
 const decorImgs = (): HTMLImageElement[] =>
@@ -47,6 +47,41 @@ describe('AmbientBackground', () => {
     expect(decorImgs().length).toBe(0)
   })
 
+  /**
+   * Yêu cầu: đổi nền mỗi 5 phút. Test dùng `rotateMs` ngắn để không phải chờ —
+   * nhưng vẫn đi qua ĐÚNG đường code của bản thật (setInterval), không mock.
+   */
+  it('tự đổi ảnh sau mỗi chu kỳ rotateMs', async () => {
+    render(<AmbientBackground seed="library" rotateMs={40} />)
+    const first = decorImgs()[0].getAttribute('src')
+    await waitFor(
+      () => expect(decorImgs().some((i) => i.getAttribute('src') !== first)).toBe(true),
+      { timeout: 1500 },
+    )
+  })
+
+  it('mặc định đúng 5 phút', () => {
+    expect(BG_ROTATE_MS).toBe(5 * 60 * 1000)
+  })
+
+  it('lớp phủ là TRẮNG (light mode), không phải tối', () => {
+    const { container } = render(<AmbientBackground seed="library" />)
+    const overlay = container.querySelector('.absolute.inset-0:not(img)')
+    expect(overlay?.className).toContain('white')
+  })
+
+  /**
+   * Bản đầu tôi đặt opacity 0.22 + blur-2xl + phủ 75–95% nên ảnh gần như vô hình
+   * — mất hẳn thứ nó tồn tại để làm. Test này khoá lại việc ảnh phải HIỆN RÕ.
+   */
+  it('ảnh KHÔNG bị làm mờ/nhạt tới mức vô hình', () => {
+    render(<AmbientBackground seed="library" />)
+    const cls = decorImgs()[0].className
+    expect(cls).not.toContain('blur-2xl')
+    expect(cls).not.toContain('blur-xl')
+    expect(cls).not.toMatch(/opacity-\[0\.[012]/)
+  })
+
   it('thuần trang trí: aria-hidden và không ăn click', () => {
     const { container } = render(<AmbientBackground seed="library" />)
     const wrap = container.querySelector('[aria-hidden]')
@@ -59,61 +94,4 @@ describe('AmbientBackground', () => {
     // ảnh trang trí phải có alt rỗng
     expect(decorImgs()[0].getAttribute('alt')).toBe('')
   })
-})
-
-describe('FloatingAccents', () => {
-  it('render đúng số icon yêu cầu', () => {
-    render(<FloatingAccents seed="x" count={4} />)
-    expect(decorImgs().length).toBe(4)
-  })
-
-  it('count 0 ⇒ không render gì', () => {
-    render(<FloatingAccents seed="x" count={0} />)
-    expect(decorImgs().length).toBe(0)
-  })
-
-  it('một ảnh lỗi ⇒ ẩn CẢ nhóm, không để lại vài icon vỡ lẫn icon lành', () => {
-    render(<FloatingAccents seed="x" count={4} />)
-    fireEvent.error(decorImgs()[0])
-    expect(decorImgs().length).toBe(0)
-  })
-
-  it('vị trí ổn định theo seed', () => {
-    const { unmount } = render(<FloatingAccents seed="same" count={3} />)
-    const before = decorImgs().map((i) => (i as HTMLElement).style.left)
-    unmount()
-    render(<FloatingAccents seed="same" count={3} />)
-    expect(decorImgs().map((i) => (i as HTMLElement).style.left)).toEqual(before)
-  })
-})
-
-describe('CelebrationBurst', () => {
-  it('running=false ⇒ không render gì', () => {
-    render(<CelebrationBurst running={false} />)
-    expect(decorImgs().length).toBe(0)
-  })
-
-  it('running=true ⇒ bung nhiều mảnh', () => {
-    render(<CelebrationBurst running />)
-    expect(decorImgs().length).toBeGreaterThan(8)
-  })
-
-  it('ảnh lỗi ⇒ ẩn hết', () => {
-    render(<CelebrationBurst running />)
-    fireEvent.error(decorImgs()[0])
-    expect(decorImgs().length).toBe(0)
-  })
-
-  it('aria-hidden — không thông báo gì cho trình đọc màn hình', () => {
-    const { container } = render(<CelebrationBurst running />)
-    expect(container.querySelector('[aria-hidden]')).not.toBeNull()
-  })
-
-  /** Không tự tắt thì hiệu ứng đứng mãi che bức tranh người chơi vừa hoàn thành. */
-  it('gọi onDone để bên gọi tắt hiệu ứng', async () => {
-    let done = false
-    render(<CelebrationBurst running onDone={() => (done = true)} />)
-    await new Promise((r) => setTimeout(r, 1900))
-    expect(done).toBe(true)
-  }, 5000)
 })

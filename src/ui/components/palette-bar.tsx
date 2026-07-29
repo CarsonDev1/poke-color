@@ -52,8 +52,8 @@ export function PaletteBar({
               'relative flex h-16 w-14 shrink-0 flex-col items-center justify-center gap-1',
               'rounded-2xl border-2 transition-colors',
               active
-                ? 'border-white bg-ink-800 shadow-glow'
-                : 'border-ink-700 bg-ink-850 hover:border-ink-600',
+                ? 'border-neon-600 bg-white shadow-glow'
+                : 'border-slate-300 bg-white/70 hover:border-slate-400',
               done && 'opacity-40',
             )}
           >
@@ -66,11 +66,11 @@ export function PaletteBar({
               Nhãn để mono + tabular: nhãn chữ-số có bề rộng rất khác nhau
               (`1` so với `m`), nên font tỉ lệ làm các nút trông xô lệch.
             */}
-            <span className="font-mono text-[13px] font-bold leading-none text-white">
+            <span className="font-mono text-[13px] font-bold leading-none text-slate-900">
               {label}
             </span>
-            <span className="text-[10px] leading-none text-ink-400">
-              {done ? <Check size={11} className="text-sun-400" /> : left}
+            <span className="text-[10px] leading-none text-slate-500">
+              {done ? <Check size={11} className="text-sun-600" /> : left}
             </span>
 
             {/* vòng sáng chạy quanh màu đang chọn */}

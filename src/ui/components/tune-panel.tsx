@@ -38,7 +38,7 @@ export function TunePanel({
   return (
     <div className="grid gap-5">
       <fieldset className="m-0 border-0 p-0">
-        <legend className="mb-2 text-sm font-bold text-white">Độ khó</legend>
+        <legend className="mb-2 text-sm font-bold text-slate-900">Độ khó</legend>
         {/*
           Preset là các thẻ bấm được, không phải radio tí xíu cạnh chữ: đây là lựa
           chọn quan trọng nhất trên màn này và vùng bấm phải đủ lớn cho ngón tay.
@@ -55,7 +55,7 @@ export function TunePanel({
                   'cursor-pointer rounded-xl border-2 p-2.5 transition-colors',
                   active
                     ? 'border-neon-400 bg-neon-500/12'
-                    : 'border-ink-700 bg-ink-950/40 hover:border-ink-600',
+                    : 'border-slate-300 bg-slate-50 hover:border-slate-400',
                   disabled && 'cursor-not-allowed opacity-50',
                 )}
               >
@@ -67,8 +67,8 @@ export function TunePanel({
                   onChange={() => pickPreset(p)}
                   className="sr-only"
                 />
-                <span className="block text-sm font-bold text-white">{PRESET_LABELS[p]}</span>
-                <span className="block text-[11px] text-ink-400">
+                <span className="block text-sm font-bold text-slate-900">{PRESET_LABELS[p]}</span>
+                <span className="block text-[11px] text-slate-500">
                   {PRESETS[p].k} màu · ~{PRESETS[p].targetRegions} vùng
                 </span>
               </label>
@@ -140,7 +140,7 @@ function Slider({
 }) {
   return (
     <label className="grid gap-1.5">
-      <span className="flex items-baseline justify-between text-sm font-semibold text-ink-200">
+      <span className="flex items-baseline justify-between text-sm font-semibold text-slate-700">
         {label}
         <span className="font-mono text-xs text-aqua-400">
           {value}
@@ -156,7 +156,7 @@ function Slider({
         disabled={disabled}
         value={value}
         onChange={(e) => onChange(Number(e.target.value))}
-        className="h-1.5 w-full cursor-pointer appearance-none rounded-full bg-ink-700 accent-neon-500 disabled:cursor-not-allowed disabled:opacity-50"
+        className="h-1.5 w-full cursor-pointer appearance-none rounded-full bg-slate-300 accent-neon-500 disabled:cursor-not-allowed disabled:opacity-50"
       />
     </label>
   )

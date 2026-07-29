@@ -152,7 +152,7 @@ export default function NewPuzzleRoute() {
       >
         <div>
           <PageTitle>Tạo tranh tô màu mới</PageTitle>
-          <p className="mt-1 text-sm text-ink-400">
+          <p className="mt-1 text-sm text-slate-500">
             Tải ảnh lên, app tự chia thành vùng có số. Tinh chỉnh rồi lưu lại.
           </p>
         </div>
@@ -170,12 +170,12 @@ export default function NewPuzzleRoute() {
         <div className="grid gap-6 lg:grid-cols-[minmax(280px,340px)_1fr]">
           <section className="grid content-start gap-5">
             <Card className="p-4">
-              <label className="grid gap-1.5 text-sm font-semibold text-ink-200">
+              <label className="grid gap-1.5 text-sm font-semibold text-slate-700">
                 Tên tranh
                 <input
                   value={title}
                   onChange={(e) => setTitle(e.target.value)}
-                  className="rounded-xl border border-ink-700 bg-ink-950/60 px-3 py-2 text-white outline-none transition-colors focus:border-aqua-400"
+                  className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-slate-900 outline-none transition-colors focus:border-aqua-400"
                 />
               </label>
             </Card>
@@ -229,7 +229,7 @@ export default function NewPuzzleRoute() {
                   <Card className="flex items-center gap-3 p-4">
                     <Loader2 className="animate-spin text-neon-400" size={18} />
                     <div className="flex-1">
-                      <p role="status" className="text-sm font-semibold text-white">
+                      <p role="status" className="text-sm font-semibold text-slate-900">
                         Đang xử lý{stage ? `: ${STAGE_LABELS[stage]}` : ''}…
                       </p>
                       {/*
@@ -237,7 +237,7 @@ export default function NewPuzzleRoute() {
                         (median + quantize là 96% chi phí — xem spec §23), và không
                         báo trước thì người dùng tưởng app treo và tải lại trang.
                       */}
-                      <p className="text-xs text-ink-400">
+                      <p className="text-xs text-slate-500">
                         Tranh nhiều màu có thể mất vài chục giây.
                       </p>
                     </div>
@@ -263,7 +263,7 @@ export default function NewPuzzleRoute() {
                 {draft.verdict.level !== 'ok' && (
                   <Card role="alert" className="border-sun-400/40 bg-sun-400/10 p-4">
                     <strong className="text-sm text-sun-400">{draft.verdict.message}</strong>
-                    <div className="mt-1 text-sm text-ink-200">{draft.verdict.hint}</div>
+                    <div className="mt-1 text-sm text-slate-700">{draft.verdict.hint}</div>
                   </Card>
                 )}
 

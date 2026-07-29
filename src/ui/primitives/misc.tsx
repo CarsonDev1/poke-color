@@ -8,11 +8,11 @@ export function Badge({
   ...props
 }: React.ComponentProps<'span'> & { tone?: 'neutral' | 'neon' | 'aqua' | 'sun' | 'danger' }) {
   const tones = {
-    neutral: 'bg-ink-800 text-ink-200 border-ink-700',
-    neon: 'bg-neon-500/15 text-neon-400 border-neon-500/40',
-    aqua: 'bg-aqua-500/15 text-aqua-400 border-aqua-500/40',
-    sun: 'bg-sun-400/15 text-sun-400 border-sun-400/40',
-    danger: 'bg-red-500/15 text-red-300 border-red-500/40',
+    neutral: 'bg-slate-200 text-slate-700 border-slate-300',
+    neon: 'bg-neon-500/12 text-neon-700 border-neon-500/35',
+    aqua: 'bg-aqua-500/12 text-aqua-700 border-aqua-500/35',
+    sun: 'bg-sun-400/18 text-sun-600 border-sun-400/45',
+    danger: 'bg-red-500/10 text-red-700 border-red-500/30',
   }
   return (
     <span
@@ -41,7 +41,7 @@ export function ProgressBar({ value, className }: { value: number; className?: s
       aria-valuemin={0}
       aria-valuemax={100}
       aria-valuenow={pct}
-      className={cn('h-2.5 w-full overflow-hidden rounded-full bg-ink-800', className)}
+      className={cn('h-2.5 w-full overflow-hidden rounded-full bg-slate-200', className)}
     >
       <motion.div
         className="h-full rounded-full bg-gradient-to-r from-aqua-400 via-neon-400 to-sun-400"
@@ -59,7 +59,7 @@ export function PageTitle({ className, ...props }: React.ComponentProps<'h1'>) {
     <h1
       className={cn(
         'font-display text-2xl font-extrabold tracking-tight sm:text-3xl',
-        'bg-gradient-to-r from-white via-neon-400 to-aqua-400 bg-clip-text text-transparent',
+        'bg-gradient-to-r from-slate-900 via-neon-600 to-aqua-700 bg-clip-text text-transparent',
         className,
       )}
       {...props}
@@ -82,9 +82,10 @@ export function Skeleton({ className }: { className?: string }) {
   return (
     <div
       className={cn(
-        'relative overflow-hidden rounded-xl bg-ink-800',
+        'relative overflow-hidden rounded-xl bg-slate-200',
         'after:absolute after:inset-0 after:animate-shimmer',
-        'after:bg-[linear-gradient(90deg,transparent,oklch(1_0_0_/_0.07),transparent)]',
+        // shimmer TOI: gradient trang tren nen slate-200 hoan toan vo hinh
+        'after:bg-[linear-gradient(90deg,transparent,oklch(0.45_0.05_265_/_0.09),transparent)]',
         'after:bg-[length:200%_100%]',
         className,
       )}

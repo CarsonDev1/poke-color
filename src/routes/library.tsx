@@ -9,7 +9,7 @@ import {
   loadThumbnail,
   type PuzzleRecord,
 } from '@/data/local-cache'
-import { AmbientBackground, FloatingAccents } from '@/ui/components/decor'
+import { AmbientBackground } from '@/ui/components/decor'
 import { SyncBanner } from '@/ui/components/sync-banner'
 import { useDialogFocus } from '@/ui/dialog-focus'
 import { useSync } from '@/ui/hooks/use-sync'
@@ -124,7 +124,7 @@ export default function LibraryRoute() {
   if (!cards) {
     return (
       <Shell>
-        <div className="mb-6 h-9 w-56 animate-pulse rounded-xl bg-ink-800" />
+        <div className="mb-6 h-9 w-56 animate-pulse rounded-xl bg-slate-200" />
         <ul className="grid list-none grid-cols-[repeat(auto-fill,minmax(220px,1fr))] gap-4 p-0">
           {[0, 1, 2, 3].map((i) => (
             <li key={i}>
@@ -138,9 +138,8 @@ export default function LibraryRoute() {
 
   return (
     <Shell>
-      {/* nen anime + icon troi: trang tri thuan, aria-hidden, khong an click */}
+      {/* nen anime doi moi 5 phut: trang tri thuan, aria-hidden, khong an click */}
       <AmbientBackground seed="library" />
-      <FloatingAccents seed="library" count={5} />
       <SyncBanner state={sync} />
 
       <motion.header
@@ -151,7 +150,7 @@ export default function LibraryRoute() {
       >
         <div>
           <PageTitle>Thư viện tranh</PageTitle>
-          <p className="mt-1 text-sm text-ink-400">
+          <p className="mt-1 text-sm text-slate-500">
             {cards.length > 0
               ? `${cards.length} tranh · ${cards.filter((c) => c.percent === 100).length} đã hoàn thành`
               : 'Tải một bức tranh lên để bắt đầu'}
@@ -192,8 +191,8 @@ export default function LibraryRoute() {
             <div className="mx-auto mb-4 grid h-16 w-16 animate-float place-items-center rounded-2xl bg-neon-500/15 text-neon-400">
               <ImagePlus size={28} />
             </div>
-            <h2 className="font-display mb-1 text-lg font-bold text-white">Chưa có tranh nào</h2>
-            <p className="mb-5 text-sm text-ink-400">
+            <h2 className="font-display mb-1 text-lg font-bold text-slate-900">Chưa có tranh nào</h2>
+            <p className="mb-5 text-sm text-slate-500">
               Tải ảnh lên, app sẽ tự chia thành vùng có số để bạn tô.
             </p>
             <Link to="/new">
@@ -222,7 +221,7 @@ export default function LibraryRoute() {
                 transition={{ delay: Math.min(i, 6) * 0.05, type: 'spring', stiffness: 260, damping: 26 }}
               >
                 <Card className="group h-full overflow-hidden">
-                  <div className="relative grid aspect-[4/3] place-items-center overflow-hidden bg-ink-950/60">
+                  <div className="relative grid aspect-[4/3] place-items-center overflow-hidden bg-white">
                     {thumbUrl ? (
                       <img
                         src={thumbUrl}
@@ -230,7 +229,7 @@ export default function LibraryRoute() {
                         className="max-h-full max-w-full transition-transform duration-300 group-hover:scale-105"
                       />
                     ) : (
-                      <span className="text-xs text-ink-600">Chưa tô</span>
+                      <span className="text-xs text-slate-400">Chưa tô</span>
                     )}
 
                     {percent === 100 && (
@@ -242,11 +241,11 @@ export default function LibraryRoute() {
                   </div>
 
                   <div className="grid gap-2 p-3">
-                    <h2 className="font-display truncate text-base font-bold text-white">
+                    <h2 className="font-display truncate text-base font-bold text-slate-900">
                       {rec.title}
                     </h2>
                     <ProgressBar value={percent / 100} />
-                    <small className="text-xs text-ink-400">
+                    <small className="text-xs text-slate-500">
                       {rec.regionCount} vùng · {rec.colorCount} màu · {percent}%
                     </small>
                     <div className="mt-1 flex gap-2">
@@ -268,7 +267,7 @@ export default function LibraryRoute() {
                         */
                         aria-label={`Xoá "${rec.title}"`}
                         onClick={() => setAskDelete(rec.id)}
-                        className="h-8 w-8 text-ink-400 hover:bg-red-500/10 hover:text-red-300"
+                        className="h-8 w-8 text-slate-500 hover:bg-red-500/10 hover:text-red-300"
                       >
                         <Trash2 size={15} />
                       </Button>
@@ -326,7 +325,7 @@ function DeleteConfirmDialog({
       role="dialog"
       aria-modal="true"
       aria-label="Xác nhận xoá"
-      className="fixed inset-0 z-30 grid place-items-center bg-ink-950/70 p-4 backdrop-blur-sm"
+      className="fixed inset-0 z-30 grid place-items-center bg-slate-900/55 p-4 backdrop-blur-sm"
     >
       <motion.div
         initial={{ scale: 0.9, y: 12 }}
@@ -335,8 +334,8 @@ function DeleteConfirmDialog({
         transition={{ type: 'spring', stiffness: 320, damping: 26 }}
       >
         <Card className="max-w-sm p-6">
-          <h2 className="font-display mb-1 text-lg font-bold text-white">Xoá tranh này?</h2>
-          <p className="mb-4 text-sm text-ink-400">
+          <h2 className="font-display mb-1 text-lg font-bold text-slate-900">Xoá tranh này?</h2>
+          <p className="mb-4 text-sm text-slate-500">
             Cả tranh và toàn bộ tiến độ tô sẽ bị xoá. Không hoàn tác được.
           </p>
           {actionError && (
