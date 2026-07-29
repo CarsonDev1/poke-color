@@ -397,12 +397,31 @@ describe('PaintCanvas', () => {
     )
     const surface = screen.getByRole('application', { name: /tranh tô màu/i })
     surface.focus()
-    // Lần gọi lúc mount (focusRegion mặc định = 0) không phải điều test này
-    // quan tâm — chỉ quan tâm lần gọi do người dùng di chuyển con trỏ.
+    // Mount không còn tự gọi callback (xem test riêng ngay dưới) — chỉ còn
+    // lại lần gọi do người dùng thật sự di chuyển con trỏ.
     onFocusRegionChange.mockClear()
 
     await userEvent.keyboard('{ArrowRight}')
 
     expect(onFocusRegionChange).toHaveBeenCalledWith(1)
+  })
+
+  it('KHÔNG gọi onFocusRegionChange lúc mount — con trỏ bàn phím mặc định ở vùng 0 nhưng người dùng chưa di chuyển gì, nên aria-live không nên announce "Vùng 0" một cách không mời mà đến', () => {
+    const p = puzzle()
+    const onFocusRegionChange = vi.fn()
+    render(
+      <PaintCanvas
+        puzzle={p}
+        engine={new PaintEngine(p.regions)}
+        selectedColor={0}
+        onPaintRegion={vi.fn()}
+        onFirstPointer={vi.fn()}
+        width={400}
+        height={100}
+        revision={0}
+        onFocusRegionChange={onFocusRegionChange}
+      />,
+    )
+    expect(onFocusRegionChange).not.toHaveBeenCalled()
   })
 })

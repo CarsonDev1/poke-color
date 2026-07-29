@@ -119,8 +119,30 @@ export function PaintCanvas({
   // Báo lên cha để announce qua aria-live (I7) — tách khỏi effect vẽ ở trên
   // vì đây là side effect khác hẳn (gọi callback ra ngoài component, không vẽ
   // gì), dù cùng phụ thuộc `focusRegion`.
+  //
+  // Chỉ gọi khi `focusRegion` THẬT SỰ đổi so với lần trước, không phải mỗi
+  // khi effect chạy: `focusRegion` mặc định là 0 và effect này luôn chạy ít
+  // nhất một lần lúc mount dù không ai bấm gì — không gác gì thì `/play`
+  // announce "Vùng 0, màu 1" lên aria-live ngay khi canvas xuất hiện, trên
+  // một con trỏ người dùng chưa từng di chuyển.
+  //
+  // Cố ý dùng ref lưu GIÁ TRỊ lần trước (không phải một cờ boolean "đã chạy
+  // lần đầu chưa"), vì StrictMode mô phỏng mount bằng unmount-rồi-mount-lại
+  // TRÊN CÙNG fiber (`useRef` không được tạo lại) mà KHÔNG đổi `focusRegion`:
+  // một cờ boolean đặt lại `true` ở lần chạy đầu và không có cleanup nào đặt
+  // lại `false` sẽ khiến lượt effect mô phỏng remount thứ hai của StrictMode
+  // (focusRegion vẫn là 0, không đổi) đọc cờ là "đã qua lần đầu", lại gọi
+  // callback một lần nữa với vùng 0 — đúng lỗi này lặp lại dưới vỏ khác. So
+  // sánh với giá trị lần trước tránh được: `lastRegionRef.current` sau lần
+  // chạy đầu đã là 0, nên lượt mô phỏng remount (focusRegion vẫn 0) thấy
+  // "không đổi" và không gọi lại, trong khi một đổi vùng thật (bàn phím) luôn
+  // có giá trị mới khác giá trị đã lưu nên vẫn gọi callback bình thường.
+  const lastRegionRef = useRef<number | null>(null)
   useEffect(() => {
-    onFocusRegionChange?.(focusRegion)
+    if (lastRegionRef.current !== null && lastRegionRef.current !== focusRegion) {
+      onFocusRegionChange?.(focusRegion)
+    }
+    lastRegionRef.current = focusRegion
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [focusRegion])
 

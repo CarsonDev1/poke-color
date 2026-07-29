@@ -95,9 +95,15 @@ export default function LibraryRoute() {
   if (loadError) {
     return (
       <main style={{ padding: 24 }}>
+        {/*
+          Render CHÍNH `loadError` (đã chứa `e.message` thật, xem catch phía
+          trên) thay vì một câu chữ cứng cố định — trước đây `loadError` được
+          tính đúng nhưng không bao giờ được đọc ra ở đây, và câu cứng luôn
+          giả định lý do là chế độ duyệt riêng tư, sai với vd QuotaExceededError
+          (bộ nhớ đầy) hay các lỗi IndexedDB khác.
+        */}
         <p role="alert" style={{ color: '#b91c1c' }}>
-          Không mở được thư viện tranh — bộ nhớ trình duyệt có thể đang bị chặn
-          (chế độ duyệt riêng tư?). Bạn vẫn có thể tạo tranh mới.
+          {loadError}
         </p>
         <Link to="/new">Tạo tranh mới</Link>
       </main>
@@ -119,12 +125,6 @@ export default function LibraryRoute() {
         */}
         {cards.length > 0 && <Link to="/new">Tạo tranh mới</Link>}
       </header>
-
-      {actionError && (
-        <p role="alert" style={{ color: '#b91c1c' }}>
-          {actionError}
-        </p>
-      )}
 
       {cards.length === 0 ? (
         <div style={{ padding: '3rem 0', textAlign: 'center', color: '#475569' }}>
@@ -171,6 +171,7 @@ export default function LibraryRoute() {
 
       {askDelete && (
         <DeleteConfirmDialog
+          actionError={actionError}
           onConfirm={() => void remove(askDelete)}
           onCancel={() => setAskDelete(null)}
         />
@@ -184,11 +185,20 @@ export default function LibraryRoute() {
  * trong thân MỘT component — component này chỉ tồn tại khi `askDelete` khác
  * null, nên gọi hook ở đây vẫn tuân thủ rules of hooks dù dialog được render
  * có điều kiện ở component cha (I9).
+ *
+ * `actionError` được render NGAY TRONG card này (không phải ở body trang phía
+ * sau) — trước đây nó nằm ở `LibraryRoute` phía trên danh sách, bị chính
+ * backdrop 60%-opaque của dialog này che mờ mỗi khi dialog còn mở (đúng lúc
+ * lỗi xảy ra, vì `askDelete` chỉ về `null` khi xoá THÀNH CÔNG — xem `remove`),
+ * nên một lần xoá thất bại chỉ hiện ra như một dòng chữ đỏ mờ đằng sau hộp
+ * thoại vẫn đang đứng yên, không đọc được.
  */
 function DeleteConfirmDialog({
+  actionError,
   onConfirm,
   onCancel,
 }: {
+  actionError: string | null
   onConfirm: () => void
   onCancel: () => void
 }) {
@@ -198,6 +208,11 @@ function DeleteConfirmDialog({
     <div role="dialog" aria-modal="true" aria-label="Xác nhận xoá" style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,.6)', display: 'grid', placeItems: 'center' }}>
       <div style={{ background: '#fff', padding: 20, borderRadius: 12 }}>
         <p>Xoá tranh này cùng toàn bộ tiến độ?</p>
+        {actionError && (
+          <p role="alert" style={{ color: '#b91c1c' }}>
+            {actionError}
+          </p>
+        )}
         <button ref={confirmRef} type="button" onClick={onConfirm}>
           Xoá tranh
         </button>{' '}

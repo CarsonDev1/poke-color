@@ -62,6 +62,11 @@ function PlayScreen({ puzzleId, puzzle, title }: { puzzleId: string; puzzle: Puz
   const paint = usePaint(puzzleId, puzzle, sound)
   const [peek, setPeek] = useState(false)
   const [originalUrl, setOriginalUrl] = useState<string | null>(null)
+  // Lỗi tải ảnh gốc (vd IndexedDB bị chặn) — trước khi có state này,
+  // `loadOriginal(...).then(...)` không có `.catch`: bấm "Xem ảnh gốc" không
+  // hiện gì hết, im lặng hoàn toàn, cộng thêm một unhandled rejection (site mà
+  // fix I3 bỏ sót — xem effect tải ảnh gốc bên dưới).
+  const [peekError, setPeekError] = useState<string | null>(null)
   const [askReset, setAskReset] = useState(false)
   const [showDone, setShowDone] = useState(false)
   // Nội dung của vùng aria-live dùng chung — cập nhật bởi CẢ hai nguồn: đổi
@@ -103,15 +108,24 @@ function PlayScreen({ puzzleId, puzzle, title }: { puzzleId: string; puzzle: Puz
     if (!peek && !showDone) return
     if (originalUrlRef.current) return
     let alive = true
-    void loadOriginal(puzzleId).then((blob) => {
-      // `alive` chặn trường hợp promise về sau khi effect này đã bị huỷ
-      // (đổi puzzle, unmount, hoặc peek/showDone tắt rồi bật lại) — nếu
-      // không, URL được tạo ra mà không ai còn cầm để revoke.
-      if (!blob || !alive) return
-      const url = URL.createObjectURL(blob)
-      originalUrlRef.current = url
-      setOriginalUrl(url)
-    })
+    setPeekError(null)
+    void loadOriginal(puzzleId)
+      .then((blob) => {
+        // `alive` chặn trường hợp promise về sau khi effect này đã bị huỷ
+        // (đổi puzzle, unmount, hoặc peek/showDone tắt rồi bật lại) — nếu
+        // không, URL được tạo ra mà không ai còn cầm để revoke.
+        if (!blob || !alive) return
+        const url = URL.createObjectURL(blob)
+        originalUrlRef.current = url
+        setOriginalUrl(url)
+      })
+      .catch((e: unknown) => {
+        // PHẢI bắt: không có `.catch` ở đây, một IndexedDB bị chặn (chế độ
+        // duyệt riêng tư, bộ nhớ đầy) làm "Xem ảnh gốc" không làm gì cả — im
+        // lặng hoàn toàn — cộng thêm một unhandled rejection. Site mà I3 bỏ sót.
+        if (!alive) return
+        setPeekError(e instanceof Error ? e.message : 'Không tải được ảnh gốc.')
+      })
     return () => {
       alive = false
     }
@@ -273,6 +287,12 @@ function PlayScreen({ puzzleId, puzzle, title }: { puzzleId: string; puzzle: Puz
 
       {peek && originalUrl && (
         <img src={originalUrl} alt="Ảnh gốc" style={{ maxWidth: 320, borderRadius: 8 }} />
+      )}
+
+      {peek && !originalUrl && peekError && (
+        <p role="alert" style={{ color: '#b91c1c' }}>
+          {peekError}
+        </p>
       )}
 
       {askReset && (
