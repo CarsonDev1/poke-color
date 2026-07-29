@@ -1,3 +1,4 @@
+import { colorLabel } from '@/core/label-alphabet'
 import type { Rgb } from '@/core/types'
 import { rgbCss } from '@/render/layers'
 
@@ -22,6 +23,8 @@ export function PaletteBar({
         const left = remaining[i] ?? 0
         const done = left === 0
         const active = selected === i
+        // một biến cho cả aria-label và text hiển thị: hai chỗ không thể lệch
+        const label = colorLabel(i)
         return (
           <button
             key={i}
@@ -31,7 +34,7 @@ export function PaletteBar({
             // nút bị disabled thật, không chỉ mờ: chọn được một màu đã xong
             // rồi bấm khắp tranh mà không gì xảy ra trông như app hỏng
             disabled={done}
-            aria-label={done ? `Màu ${i + 1}, đã tô xong` : `Màu ${i + 1}, còn ${left} vùng`}
+            aria-label={done ? `Màu ${label}, đã tô xong` : `Màu ${label}, còn ${left} vùng`}
             onClick={() => onSelect(i)}
             style={{
               width: 52,
@@ -53,7 +56,7 @@ export function PaletteBar({
                 border: '1px solid rgba(0,0,0,.15)',
               }}
             />
-            <span style={{ fontSize: 12, fontWeight: 700 }}>{i + 1}</span>
+            <span style={{ fontSize: 12, fontWeight: 700 }}>{label}</span>
             <span style={{ fontSize: 11, color: '#64748b', display: 'block' }}>
               {done ? '✓' : left}
             </span>

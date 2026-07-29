@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { SoundBoard } from '@/audio/synth'
+import { colorLabel } from '@/core/label-alphabet'
 import type { Puzzle } from '@/core/types'
 import { listPuzzles, loadOriginal, loadPuzzle, saveThumbnail } from '@/data/local-cache'
 import { CompletionBanner } from '@/ui/components/completion-banner'
@@ -162,7 +163,7 @@ function PlayScreen({ puzzleId, puzzle, title }: { puzzleId: string; puzzle: Puz
     (regionId: number) => {
       const region = puzzle.regions[regionId]
       if (!region) return
-      setLiveMessage(`Vùng ${regionId}, màu ${region.colorIndex + 1}`)
+      setLiveMessage(`Vùng ${regionId}, màu ${colorLabel(region.colorIndex)}`)
     },
     [puzzle],
   )

@@ -21,6 +21,16 @@ function puzzle(): Puzzle {
   return assemblePuzzle({ width: 6, height: 2, palette, regionCount: 3, regionMap }, regions)
 }
 
+/** 2×1 một vùng duy nhất, colorIndex tuỳ ý — để phủ vùng nhãn chữ */
+function puzzleWithColorIndex(colorIndex: number): Puzzle {
+  const regionMap = new Uint32Array([0, 0])
+  const palette: Rgb[] = Array.from({ length: colorIndex + 1 }, (_, i) => [i, i, i] as Rgb)
+  const regions: RegionMeta[] = [
+    { id: 0, colorIndex, area: 2, minX: 0, minY: 0, maxX: 1, maxY: 0, anchorX: 0, anchorY: 0, anchorR: 4, hasLabel: true },
+  ]
+  return assemblePuzzle({ width: 2, height: 1, palette, regionCount: 1, regionMap }, regions)
+}
+
 function fakeCtx() {
   return {
     font: '',
@@ -57,6 +67,26 @@ describe('drawLabels', () => {
     // colorIndex 0 và 2 ⇒ hiển thị 1 và 3 (đánh số từ 1 cho người dùng)
     expect(drawn).toContain('1')
     expect(drawn).toContain('3')
+  })
+
+  it('colorIndex >= 10 dùng nhãn chữ, không phải số hai chữ số', () => {
+    const ctx = fakeCtx()
+    const p = puzzleWithColorIndex(10)
+    drawLabels(ctx, p, new PaintEngine(p.regions), V, 200, 200)
+
+    const drawn = ctx.fillText.mock.calls.map((c) => c[0])
+    expect(drawn).toContain('a')
+    expect(drawn).not.toContain('11')
+  })
+
+  it('colorIndex 9 ra "0" — chỗ số 0 nằm cuối dãy số, không phải đầu', () => {
+    const ctx = fakeCtx()
+    const p = puzzleWithColorIndex(9)
+    drawLabels(ctx, p, new PaintEngine(p.regions), V, 200, 200)
+
+    const drawn = ctx.fillText.mock.calls.map((c) => c[0])
+    expect(drawn).toContain('0')
+    expect(drawn).not.toContain('10')
   })
 
   it('KHÔNG vẽ số cho vùng hasLabel = false', () => {

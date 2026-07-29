@@ -1,4 +1,5 @@
 import type { PaintEngine } from '@/core/engine/paint-engine'
+import { colorLabel } from '@/core/label-alphabet'
 import type { Puzzle } from '@/core/types'
 import { imageToScreen, type Viewport } from '@/render/viewport'
 
@@ -37,8 +38,8 @@ export function drawLabels(
     const size = Math.min(MAX_FONT, Math.max(MIN_FONT, r.anchorR * v.scale * FONT_RATIO))
     ctx.font = `${size}px ui-sans-serif, system-ui, sans-serif`
 
-    // đánh số từ 1 cho người dùng, không phải từ 0
-    const text = String(r.colorIndex + 1)
+    // nhãn chữ-số theo legend sách: 1..9 0 a b c ... — xem core/label-alphabet
+    const text = colorLabel(r.colorIndex)
 
     ctx.strokeStyle = 'rgba(255,255,255,0.9)'
     ctx.lineWidth = Math.max(1, size / 8)

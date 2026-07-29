@@ -63,6 +63,24 @@ describe('PaletteBar', () => {
     expect(screen.getByRole('radio', { name: /màu 3.*xong/i })).toBeTruthy()
   })
 
+  it('nút thứ 11 trở đi hiện nhãn chữ trong cả text và aria-label', () => {
+    const long: Rgb[] = Array.from({ length: 12 }, (_, i) => [i * 20, 100, 150] as Rgb)
+    render(
+      <PaletteBar
+        palette={long}
+        remaining={new Uint32Array(12).fill(1)}
+        selected={null}
+        onSelect={vi.fn()}
+      />,
+    )
+    // colorIndex 10 ⇒ 'a', 11 ⇒ 'b'. Nhãn số hai chữ số không được xuất hiện.
+    const a = screen.getByRole('radio', { name: /màu a, còn 1 vùng/i })
+    expect(a.textContent).toMatch(/a/)
+    expect(screen.getByRole('radio', { name: /màu b, còn 1 vùng/i })).toBeTruthy()
+    expect(screen.queryByRole('radio', { name: /màu 11/i })).toBeNull()
+    expect(screen.queryByRole('radio', { name: /màu 12/i })).toBeNull()
+  })
+
   it('có role radiogroup với nhãn', () => {
     render(
       <PaletteBar palette={palette} remaining={new Uint32Array([1, 1, 1])} selected={null} onSelect={vi.fn()} />,
