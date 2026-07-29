@@ -527,3 +527,78 @@ Rủi ro **R1** ("chất lượng segmentation *là* sản phẩm") vẫn đúng
 - **Điện thoại phải zoom nhiều.** Ở 4500 vùng, mỗi vùng chỉ vài chục pixel. Đã có zoom/pan và nhãn co giãn theo scale, cộng highlight-theo-màu cho vùng quá nhỏ để in nhãn — ba thứ này giờ là thiết yếu chứ không phải tiện nghi.
 - **Một tranh mất nhiều giờ.** Đúng như sách thật.
 - **Pipeline chậm hơn.** 2000px là gấp ~2× số pixel của 1400px, và bisection chạy lại Stage 3→4 tới 6 lần. Timeout 60s có thể phải nâng — phải đo, không đoán.
+
+---
+
+## §23 — Kết quả thực hiện §22 (đo, không phỏng đoán)
+
+§22 giả định đây là việc đổi hằng số. **Không phải.** Đo trên pipeline thật lộ ra
+hai defect chặn mà không unit test nào bắt được, và cả hai đều nằm ở thuật toán.
+
+### Nhãn: `minArea` là đòn SAI
+
+Vùng dùng được hay không quyết định bởi **bán kính trong**, không phải **diện
+tích**. Sliver 1×40px có area 40 nên sống sót mọi `minArea`, nhưng không chứa nổi
+một ký tự, không hiện được màu đã tô, và không bấm được trên điện thoại. Ở mật độ
+cao thì 86% vùng rơi vào loại này ⇒ không có số ⇒ **không chơi được**, tệ hơn bản
+303 vùng trước đó.
+
+Bản sửa hai tầng:
+- `mergeSmallRegions(..., minThickness)` — điều kiện CẦN, **0ms**: vùng chứa được
+  đường tròn bán kính r thì cả hai chiều bbox phải ≥ 2r. Dùng area/bbox đã có sẵn.
+  Nằm TRONG vòng bisection để số vùng bisection đo chính là số vùng cuối cùng.
+- `mergeUnlabellable(...)` — điều kiện ĐỦ bằng distance transform thật, bắt vành
+  khuyên / hình chữ C có bbox to mà bán kính trong nhỏ. Nằm NGOÀI bisection:
+  420ms/lượt × 20 vòng = 34s nếu nhúng vào trong.
+
+Cả hai phải gộp vào vùng DÙNG ĐƯỢC (`longestNeighborWhere`), không được gộp
+mỏng-vào-mỏng: union-find sẽ nối chuỗi A→B→C trong một lượt.
+
+### `minLabelRadius` là tham số quyết định mật độ
+
+`minThickness = 2 × minLabelRadius`, nên đây mới là đòn thật sự, không phải
+`targetRegions`:
+
+| r | dày | vùng (ảnh chụp) | có nhãn |
+|---|---|---|---|
+| 1 | 2px | 4426 | 100% |
+| 2 | 4px | 1194 | 100% |
+| 3 | 6px | 661 | 99% |
+
+Chọn **r = 2**. r=1 đạt đúng mục tiêu 4500 nhưng bằng sliver dày 2px: đúng SỐ
+LƯỢNG, sai HÌNH DẠNG — vùng trang sách nhỏ mà đều đặn, chứa vừa một ký tự.
+
+### Số vùng phụ thuộc NỘI DUNG ẢNH, không chỉ tham số
+
+| preset | target | ảnh kiểu chụp | tranh minh hoạ |
+|---|---|---|---|
+| de | 400 | 112 | 301 |
+| vua | 1200 | 263 | 1342 |
+| kho | 3000 | 268 | 2640 |
+| sach | 4500 | 661 | 2640 |
+
+Ảnh đầy gradient (sóng nước chu kỳ ~7px) sinh nhiều vùng mỏng bị loại. Tranh minh
+hoạ có mảng phẳng, cạnh sạch ⇒ vùng đều đặn ⇒ số vùng cao hơn 4–10× và **100% có
+nhãn**. Kết xuất PNG để so mắt: 1484 vùng, 1484 có nhãn, **1477 ký tự nằm trọn
+trong vùng của nó, 7 tràn**.
+
+`sach` chạm trần 2640 vì ảnh hết chi tiết — giới hạn nội dung, không phải lỗi.
+Mục tiêu 3000–5000 vùng đạt được hay không **tuỳ ảnh nguồn**; app không được hứa
+một con số cố định.
+
+### Hai defect phát sinh trong lúc sửa
+
+- **`BISECTION_MAX_ITERS = 6`** là tìm nhị phân trên dải [1, 2664] — không thể hội
+  tụ. Trả 1756 vùng cho target 4500. Nâng lên 20; mỗi vòng chỉ ~300ms.
+- **Force-merge rebuild toàn ảnh MỘT LẦN MỖI VÙNG.** Bản gốc `break` sau mỗi lần
+  gộp để tránh nối chuỗi — ổn khi chỉ vài vùng lọt tới theo điều kiện area, nhưng
+  điều kiện độ dày đẩy hàng trăm vùng xuống đó: **đo được 144s** một lần sinh.
+  Thay bằng ghép từng CẶP RỜI NHAU (`touched`): nhiều cặp mỗi lượt, đường gộp vẫn
+  dài tối đa 2.
+
+### Chi phí thật (maxDim 2000, k 30)
+
+median3x3 ×2 **7.7s** · quantize **9.1s** · labelRegions 88ms · mergeSmall 219ms ·
+computeAnchors 199ms. **96% chi phí nằm ở median + quantize** — đó là chỗ cần tối
+ưu nếu sau này cần nhanh hơn, không phải phần segmentation. `PIPELINE_TIMEOUT_MS`
+60s → 180s vì điện thoại chậm 3× sẽ vượt 60s và nhận thông báo "ảnh quá lớn" sai.
