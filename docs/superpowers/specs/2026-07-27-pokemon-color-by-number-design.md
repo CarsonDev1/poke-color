@@ -602,3 +602,66 @@ median3x3 ×2 **7.7s** · quantize **9.1s** · labelRegions 88ms · mergeSmall 2
 computeAnchors 199ms. **96% chi phí nằm ở median + quantize** — đó là chỗ cần tối
 ưu nếu sau này cần nhanh hơn, không phải phần segmentation. `PIPELINE_TIMEOUT_MS`
 60s → 180s vì điện thoại chậm 3× sẽ vượt 60s và nhận thông báo "ảnh quá lớn" sai.
+
+---
+
+## §24 — Trạng thái hoàn thành (2026-07-29)
+
+Cả năm mảng của lộ trình đã có code và test. **636 test · typecheck sạch · build sạch.**
+
+| Mảng | Trạng thái | Ghi chú |
+|---|---|---|
+| Pipeline lõi (§6) | ✅ | 7 stage, deterministic |
+| Mật độ ngang sách (§22–23) | ✅ | nhãn 30 ký tự, 100% vùng có số |
+| Supabase: auth + đồng bộ (§13–14) | ✅ | RLS đã kiểm bằng thực nghiệm |
+| Vector hoá + in A4 (§7) | ✅ | crack graph, property test chống hở kẽ |
+| Editor sửa vùng (§9) | ✅ | undo = chạy lại từ gốc |
+| Chia sẻ + thống kê (§11–12) | ✅ | RPC ẩn ảnh gốc, chuỗi ngày |
+
+### Đối chiếu §21 "Tiêu chí hoàn thành"
+
+1. **Test `core/` xanh, gồm determinism và topology vector** — ✅ đạt.
+2. **Chạy tay hết vòng** — ❌ **CHƯA**. Xem "chưa kiểm được" bên dưới.
+3. **Tắt mạng giữa lúc tô rồi bật lại** — ⚠️ logic có test (outbox giữ việc khi
+   đẩy thất bại, `drainOutbox` khi `online`), nhưng chưa chạy tay với mạng thật.
+4. **Dùng được hoàn toàn bằng bàn phím + `aria-live`** — ✅ có ở màn chơi từ Plan 1.
+   Các màn mới (`/print`, `/edit`, `/stats`, `/s`) **chưa được kiểm bàn phím**.
+
+### Chưa kiểm được — cần người dùng thật
+
+Tất cả đều test bằng client giả / fixture tổng hợp, **chưa lần nào chạy với dữ
+liệu thật đi hết đường**:
+
+- **Đăng nhập magic-link end-to-end.** Không mở được email để bấm link, nên
+  `sendMagicLink → email → consumeAuthRedirect → upload Storage → sync` chưa
+  chạy thật lần nào.
+- **Bucket `puzzles` có tồn tại chưa.** GET trả 404 nhưng đó *là* hành vi đúng
+  của bucket private với khách ẩn danh, nên không kết luận được. Migration có
+  `insert into storage.buckets` nên rất có thể đã có.
+- **Hành vi cột `bytea` thật.** Codec hex có round-trip test, nhưng chưa xác nhận
+  Postgres nhận đúng.
+- **RLS chặn DELETE.** Đã xác nhận chặn INSERT (`42501`). DELETE trả 204 vì khớp
+  0 hàng trên bảng rỗng — đúng về lý thuyết, chưa chứng minh bằng thực nghiệm.
+- **In ra PDF thật không hở kẽ.** Bất biến topology có property test (và test đó
+  đã được xác nhận FAIL khi tiêm đúng lỗi của D8), nhưng chưa in thật.
+- **`/print` với tranh vài nghìn vùng.** Chưa đo thời gian vector hoá thực tế.
+
+### Bài học đắt nhất của dự án
+
+**Test không có sức phân biệt còn tệ hơn không có test**, vì nó tạo cảm giác an
+toàn giả. Ba lần trong dự án này:
+
+1. Test chống hở kẽ (R4) dùng biên chung là đường THẲNG — xanh cả khi code sai,
+   vì đường thẳng đơn giản hoá trong ngữ cảnh nào cũng cho đúng hai đầu. Phải
+   đổi sang bậc thang chéo mới bắt được.
+2. Fixture quantize có phép hoán vị tự nghịch đảo — 6 assertion vẫn xanh khi
+   reviewer tiêm lỗi remap ngược.
+3. Test bilateral không phân biệt được blur thường với bilateral đúng.
+
+Cách chữa duy nhất đáng tin: **tiêm đúng cái lỗi mà test được cho là bắt, rồi
+xác nhận nó FAIL**. Đã áp dụng cho test chống hở kẽ và test nâng cấp IndexedDB
+v1→v2.
+
+**Và một cảnh báo về suite này:** một lần chạy báo `Test Files 55 passed` trong
+khi có `Failed to start forks worker` — một file bị bỏ qua âm thầm. Chạy lại cho
+56 files/550 tests. Con số "passed" KHÔNG đủ để tin; phải kiểm cả số lượng file.
