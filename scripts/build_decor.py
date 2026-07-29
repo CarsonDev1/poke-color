@@ -5,9 +5,9 @@
 VI SAO CO SCRIPT NAY chu khong copy tay:
   * Nguon la 45 MB PNG tho. Ship nguyen la khong the — script thu nho + doi WebP
     xuong con duoi 1 MB.
-  * public/decor/ nam trong .gitignore (asset game co ban quyen, repo thi public),
-    nen phai co duong TAI TAO. Khong co script thi mat may la mat sach trang tri
-    va khong ai biet lay lai tu dau.
+  * public/decor/ CO commit, nhung van can duong TAI TAO: doi danh sach asset
+    (them stamp, doi so background) thi phai sinh lai, va khong co script thi
+    khong ai biet lay lai tu dau.
   * Viec chon 16 background theo do PHU MAU la thuat toan, khong phai gu tham my
     — chay lai cho ket qua giong nhau.
 
@@ -167,9 +167,8 @@ def main():
     with open(ts_path, 'w', encoding='utf-8') as f:
         f.write('// SINH TU DONG boi scripts/build_decor.py — DUNG SUA TAY.\n')
         f.write('//\n')
-        f.write('// Anh thuc nam o public/decor/ va bi gitignore (asset co ban quyen,\n')
-        f.write('// repo public). Thieu anh thi cac component trang tri tu an — xem\n')
-        f.write('// src/ui/components/decor.tsx.\n')
+        f.write('// Anh thuc nam o public/decor/ (co commit). Thieu anh thi cac\n')
+        f.write('// component trang tri tu an — xem src/ui/components/decor.tsx.\n')
         f.write('//\n')
         f.write('// Tai tao: python scripts/build_decor.py "<thu-muc-nguon>"\n\n')
         for key in ('bg', 'celebrate', 'accent', 'type'):

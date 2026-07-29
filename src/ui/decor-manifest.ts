@@ -1,8 +1,7 @@
 // SINH TU DONG boi scripts/build_decor.py — DUNG SUA TAY.
 //
-// Anh thuc nam o public/decor/ va bi gitignore (asset co ban quyen,
-// repo public). Thieu anh thi cac component trang tri tu an — xem
-// src/ui/components/decor.tsx.
+// Anh thuc nam o public/decor/ (co commit). Thieu anh thi cac
+// component trang tri tu an — xem src/ui/components/decor.tsx.
 //
 // Tai tao: python scripts/build_decor.py "<thu-muc-nguon>"
 

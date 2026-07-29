@@ -30,8 +30,10 @@ function pickStable<T>(list: readonly T[], seed: string): T | null {
  * `aria-hidden` + `pointer-events-none`: thuần trang trí, không được lọt vào
  * accessibility tree hay ăn cú click.
  *
- * Tự ẩn khi ảnh 404: `public/decor/` bị gitignore nên một bản clone sạch sẽ
- * KHÔNG có ảnh, và để nguyên thì trình duyệt hiện icon ảnh vỡ giữa trang.
+ * Tự ẩn khi ảnh 404. Ảnh CÓ được commit, nhưng vẫn cần nhánh này: ai chưa chạy
+ * `scripts/build_decor.py` sau khi đổi danh sách asset, hoặc một file bị thiếu/
+ * hỏng, thì trình duyệt sẽ hiện icon ảnh vỡ giữa trang — tệ hơn hẳn việc không
+ * có trang trí.
  */
 export function AmbientBackground({ seed, className }: { seed: string; className?: string }) {
   const src = useMemo(() => pickStable(DECOR_BG, seed), [seed])

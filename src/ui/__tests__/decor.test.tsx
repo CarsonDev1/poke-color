@@ -36,9 +36,9 @@ describe('AmbientBackground', () => {
   })
 
   /**
-   * `public/decor/` bị GITIGNORE (asset có bản quyền, repo public), nên một bản
-   * clone sạch KHÔNG có ảnh. Để nguyên thì trình duyệt hiện icon ảnh vỡ giữa
-   * trang — tệ hơn hẳn việc không có trang trí.
+   * Ảnh CÓ được commit, nhưng nhánh này vẫn cần: một file thiếu hoặc hỏng (hoặc
+   * ai đổi danh sách asset mà chưa chạy lại build_decor.py) sẽ làm trình duyệt
+   * hiện icon ảnh vỡ giữa trang — tệ hơn hẳn việc không có trang trí.
    */
   it('ảnh 404 ⇒ TỰ ẨN hoàn toàn, không để lại icon ảnh vỡ', () => {
     render(<AmbientBackground seed="library" />)
