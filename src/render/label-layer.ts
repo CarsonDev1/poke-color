@@ -58,8 +58,22 @@ const FOCUS_RING_WIDTH = 3
  * live region, và vì id vùng theo thứ tự raster-scan (không theo vị trí thị
  * giác), người dùng không có cách nào đoán được con trỏ đang ở đâu.
  *
- * Gọi SAU `drawLabels` trên CÙNG canvas `labels` (không tự `clearRect`) — vẽ
- * theo run giống `drawHighlight`, trong hệ toạ độ MÀN HÌNH như `drawLabels`.
+ * Vẽ ĐÚNG MỘT `strokeRect` — bounding box của vùng (`minX/minY/maxX/maxY` có
+ * sẵn trên `RegionMeta`), không phải một rect mỗi pixel-run. Bản trước lặp
+ * qua `puzzle.runs` và stroke một rect riêng cho mỗi run: mỗi run chỉ cao
+ * `1 × scale` px màn hình, nên ở scale < 3 (vd `fitViewport` không kẹp scale
+ * ≥ 1, và ảnh lớn hơn khung nhìn cho scale < 1 rất bình thường) viền 3px của
+ * các run liền kề chồng lấp lên nhau và tô đặc cả vùng thành một khối xanh
+ * — đúng lỗi mà lần sửa này khắc phục.
+ *
+ * Chỉ vẽ khi `focused` — bề mặt tương tác đang thật sự có DOM focus. Người
+ * dùng chuột/chạm chưa từng Tab vào canvas không nên thấy viền con trỏ bàn
+ * phím này; `focusRegion` mặc định là 0 nên nếu không gác điều kiện này,
+ * vùng 0 luôn bị viền (nay là bbox, không còn tô đặc, nhưng vẫn là một dấu
+ * hiệu thị giác không mời mà đến) ngay khi canvas xuất hiện.
+ *
+ * Gọi SAU `drawLabels` trên CÙNG canvas `labels` (không tự `clearRect`), vẽ
+ * trong hệ toạ độ MÀN HÌNH như `drawLabels`.
  */
 export function drawFocusRing(
   ctx: CanvasRenderingContext2D,
@@ -68,20 +82,19 @@ export function drawFocusRing(
   v: Viewport,
   viewW: number,
   viewH: number,
+  focused: boolean,
 ): void {
+  if (!focused) return
   if (!Number.isInteger(regionId) || regionId < 0 || regionId >= puzzle.regions.length) return
 
-  const { runs } = puzzle
+  const r = puzzle.regions[regionId]
+  const topLeft = imageToScreen(v, r.minX, r.minY)
+  const bottomRight = imageToScreen(v, r.maxX + 1, r.maxY + 1)
+  if (bottomRight.x < 0 || bottomRight.y < 0 || topLeft.x > viewW || topLeft.y > viewH) return
+
   ctx.save()
   ctx.strokeStyle = FOCUS_RING_COLOR
   ctx.lineWidth = FOCUS_RING_WIDTH
-
-  for (let i = runs.offsets[regionId]; i < runs.offsets[regionId + 1]; i++) {
-    const topLeft = imageToScreen(v, runs.x0[i], runs.y[i])
-    const bottomRight = imageToScreen(v, runs.x1[i] + 1, runs.y[i] + 1)
-    if (bottomRight.x < 0 || bottomRight.y < 0 || topLeft.x > viewW || topLeft.y > viewH) continue
-    ctx.strokeRect(topLeft.x, topLeft.y, bottomRight.x - topLeft.x, bottomRight.y - topLeft.y)
-  }
-
+  ctx.strokeRect(topLeft.x, topLeft.y, bottomRight.x - topLeft.x, bottomRight.y - topLeft.y)
   ctx.restore()
 }

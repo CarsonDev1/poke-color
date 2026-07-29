@@ -60,6 +60,11 @@ export function PaintCanvas({
     fitViewport(puzzle.width, puzzle.height, width, height),
   )
   const [focusRegion, setFocusRegion] = useState(0)
+  // DOM focus THẬT của bề mặt tương tác — không phải "có tồn tại focusRegion
+  // hay không". `drawFocusRing` chỉ được vẽ khi giá trị này true (I7 fix):
+  // người dùng chuột/chạm chưa từng Tab vào canvas không nên thấy viền con
+  // trỏ bàn phím ngay khi canvas xuất hiện (focusRegion mặc định là 0).
+  const [hasFocus, setHasFocus] = useState(false)
   const dragMode = useRef<'none' | 'paint' | 'pan'>('none')
   const lastRegion = useRef<number | null>(null)
   const lastPoint = useRef<{ x: number; y: number } | null>(null)
@@ -85,20 +90,31 @@ export function PaintCanvas({
     setView(fitViewport(puzzle.width, puzzle.height, width, height))
   }, [puzzle.width, puzzle.height, width, height])
 
-  // highlight + số + viền con trỏ bàn phím vẽ lại khi màu chọn, viewport,
-  // tiến độ, hay vùng đang focus đổi. `focusRegion` PHẢI có trong dependency
-  // list (I7): thiếu nó, ArrowRight/Left/Up/Down (chỉ đổi focusRegion, không
-  // đổi gì khác trong danh sách này) sẽ không kích hoạt vẽ lại — con trỏ tồn
-  // tại trong state nhưng vô hình trên màn hình.
+  // highlight vẽ lại khi màu chọn, viewport, hay tiến độ đổi — KHÔNG phụ
+  // thuộc `hasFocus`/`focusRegion`: tách riêng khỏi effect số+viền con trỏ
+  // bên dưới để Tab/click vào canvas (chỉ đổi `hasFocus`, không đổi gì ở đây)
+  // không kéo theo một lượt tô lại highlight thừa (từng làm lộ `fillRect` giả
+  // dương trong test I14 khi gộp chung một effect).
   useEffect(() => {
     const octx = overlayRef.current?.getContext('2d')
-    const lctx = labelRef.current?.getContext('2d')
     if (octx) drawHighlight(octx, puzzle, engine, selectedColor, view, puzzle.width, puzzle.height)
+  }, [puzzle, engine, selectedColor, view, puzzle.width, puzzle.height, engine.filledCount])
+
+  // số + viền con trỏ bàn phím vẽ lại khi viewport, tiến độ, vùng đang focus,
+  // hay DOM focus của bề mặt tương tác đổi. `focusRegion` PHẢI có trong
+  // dependency list (I7): thiếu nó, ArrowRight/Left/Up/Down (chỉ đổi
+  // focusRegion, không đổi gì khác trong danh sách này) sẽ không kích hoạt vẽ
+  // lại — con trỏ tồn tại trong state nhưng vô hình trên màn hình. `hasFocus`
+  // cũng PHẢI có mặt: viền chỉ được vẽ khi bề mặt thật sự có DOM focus, nên
+  // Tab vào/rời canvas (đổi `hasFocus`, không đổi gì khác) cũng phải vẽ lại
+  // để hiện/ẩn viền đúng lúc.
+  useEffect(() => {
+    const lctx = labelRef.current?.getContext('2d')
     if (lctx) {
       drawLabels(lctx, puzzle, engine, view, width, height)
-      drawFocusRing(lctx, puzzle, focusRegion, view, width, height)
+      drawFocusRing(lctx, puzzle, focusRegion, view, width, height, hasFocus)
     }
-  }, [puzzle, engine, selectedColor, view, width, height, engine.filledCount, focusRegion])
+  }, [puzzle, engine, view, width, height, engine.filledCount, focusRegion, hasFocus])
 
   // Báo lên cha để announce qua aria-live (I7) — tách khỏi effect vẽ ở trên
   // vì đây là side effect khác hẳn (gọi callback ra ngoài component, không vẽ
@@ -246,6 +262,8 @@ export function PaintCanvas({
       onKeyUp={(e) => {
         if (e.key === ' ') spaceHeld.current = false
       }}
+      onFocus={() => setHasFocus(true)}
+      onBlur={() => setHasFocus(false)}
       style={{
         position: 'relative',
         width,

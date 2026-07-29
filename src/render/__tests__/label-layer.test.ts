@@ -122,36 +122,48 @@ describe('drawLabels', () => {
 })
 
 describe('drawFocusRing (I7 — con trỏ vùng bàn phím phải hiện ra được vẽ, không chỉ tồn tại trong state)', () => {
-  it('viền vùng đang focus bằng strokeRect, một lần mỗi run', () => {
+  it('viền vùng đang focus bằng ĐÚNG MỘT strokeRect (bounding box) — KHÔNG phải một lần mỗi run', () => {
     const ctx = fakeCtx()
     const p = puzzle()
-    // vùng 0: 2 run (một mỗi hàng của khối 2×2)
-    drawFocusRing(ctx, p, 0, V, 100, 100)
-    expect(ctx.strokeRect).toHaveBeenCalledTimes(2)
+    // vùng 0: 2 run (một mỗi hàng của khối 2×2). Trước khi sửa: code stroke
+    // MỘT rect MỖI RUN, cao 1×scale px màn hình, viền 3px chồng lấp giữa các
+    // run liền kề khiến cả vùng bị tô đặc màu xanh — bắt lỗi này bằng cách
+    // khẳng định chỉ có ĐÚNG MỘT lần gọi strokeRect cho một vùng nhiều run.
+    drawFocusRing(ctx, p, 0, V, 100, 100, true)
+    expect(ctx.strokeRect).toHaveBeenCalledTimes(1)
   })
 
   it('chỉ viền đúng vùng đang focus, không viền vùng khác', () => {
     const ctx = fakeCtx()
     const p = puzzle()
-    drawFocusRing(ctx, p, 2, V, 100, 100)
-    // vùng 2 cũng có 2 run — nếu code lỡ viền nhầm vùng 0 hoặc 1 (4 run gộp
-    // lại: 2+2) thì assertion đếm lần gọi này sẽ lệch, bắt được lỗi off-by-id
-    expect(ctx.strokeRect).toHaveBeenCalledTimes(2)
+    drawFocusRing(ctx, p, 2, V, 100, 100, true)
+    expect(ctx.strokeRect).toHaveBeenCalledTimes(1)
   })
 
   it('id vùng ngoài phạm vi (vd -1 khi puzzle rỗng) → không vẽ gì, không throw', () => {
     const ctx = fakeCtx()
     const p = puzzle()
-    expect(() => drawFocusRing(ctx, p, 99, V, 100, 100)).not.toThrow()
+    expect(() => drawFocusRing(ctx, p, 99, V, 100, 100, true)).not.toThrow()
     expect(ctx.strokeRect).not.toHaveBeenCalled()
   })
 
-  it('vẽ ở toạ độ màn hình (theo viewport), không phải toạ độ ảnh thô', () => {
+  it('vẽ ở toạ độ màn hình (theo viewport), không phải toạ độ ảnh thô — dùng bounding box (minX/minY..maxX+1/maxY+1) của cả vùng, không phải một run riêng lẻ', () => {
     const ctx = fakeCtx()
     const p = puzzle()
-    drawFocusRing(ctx, p, 0, { scale: 10, tx: 5, ty: 7 }, 200, 200)
-    // vùng 0 hàng y=0 chạy ảnh x=[0,1] ⇒ màn hình x=[5, 25], y=[7,17]
-    expect(ctx.strokeRect).toHaveBeenCalledWith(5, 7, 20, 10)
+    drawFocusRing(ctx, p, 0, { scale: 10, tx: 5, ty: 7 }, 200, 200, true)
+    // vùng 0: bbox ảnh x=[0,2) y=[0,2) (khối 2×2) ⇒ màn hình x=[5,25), y=[7,27)
+    expect(ctx.strokeRect).toHaveBeenCalledWith(5, 7, 20, 20)
+  })
+
+  it('KHÔNG vẽ gì khi bề mặt tương tác chưa có DOM focus thật — người dùng chuột/chạm không bao giờ nên thấy viền này', () => {
+    const ctx = fakeCtx()
+    const p = puzzle()
+    // Trước khi sửa: hàm không nhận tham số focused nào cả, luôn vẽ bất kể
+    // canvas có đang được Tab tới hay không — focusRegion mặc định là 0 nên
+    // ngay khi canvas xuất hiện, vùng 0 (thường là nền, vùng lớn nhất) đã bị
+    // tô đặc màu xanh dù chưa ai bấm Tab.
+    drawFocusRing(ctx, p, 0, V, 100, 100, false)
+    expect(ctx.strokeRect).not.toHaveBeenCalled()
   })
 })
 
