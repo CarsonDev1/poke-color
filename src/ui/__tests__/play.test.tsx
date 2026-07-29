@@ -10,6 +10,7 @@ import { Blob as NodeBlob } from 'node:buffer'
 // xung đột với các API DOM (`Blob` là tham số/kiểu trả về) và làm typecheck vỡ.
 Object.assign(globalThis, { CompressionStream, DecompressionStream, Blob: NodeBlob })
 
+import { StrictMode } from 'react'
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
@@ -438,6 +439,49 @@ describe('PlayRoute', () => {
         (c) => c.x === 0 && c.y === 0 && c.fillStyle === 'rgb(255,0,0)',
       )
       expect(paintedRestoredRegionWithPaletteColor).toBe(true)
+    })
+  })
+
+  it('StrictMode: mount kép (mount → cleanup → mount lại) không được xoá tiến độ đã lưu — cả state trong bộ nhớ (header) lẫn bản ghi trong store', async () => {
+    // Tiến độ đã lưu từ TRƯỚC — mô phỏng "vào lại /play sau khi đã tô một
+    // phần rồi rời màn ở một phiên trước".
+    await saveProgress({
+      puzzleId: 'p1',
+      filled: new Uint8Array([0b0000_0001]),
+      filledCount: 1,
+      activeSeconds: 42,
+      completedAt: null,
+      updatedAt: 1,
+    })
+
+    // Bẫy của harness: CHỈ `<StrictMode>` là phần tử NGOÀI CÙNG của render ở
+    // gốc mới double-invoke effect trong React 19.2.7 — `{ wrapper: StrictMode }`
+    // của RTL thoả điều kiện này (nó dựng `<StrictMode>{ui}</StrictMode>` làm
+    // gốc), một wrapper arrow function tự viết thì KHÔNG.
+    render(
+      <MemoryRouter initialEntries={['/play/p1']}>
+        <Routes>
+          <Route path="/play/:id" element={<PlayRoute />} />
+          <Route path="/library" element={<div>thư viện</div>} />
+        </Routes>
+      </MemoryRouter>,
+      { wrapper: StrictMode },
+    )
+
+    // Trong bộ nhớ: header phải phản ánh đúng tiến độ đã phục hồi, không bị
+    // mount kép của StrictMode làm về lại 0.
+    await waitFor(() => expect(screen.getByText(/1\s*\/\s*4/)).toBeTruthy())
+
+    // Trong store: bản ghi KHÔNG được bị `flush()` ghi đè về {0, 0} — trước
+    // khi sửa (I12's `flush` không gác gì cả, và `aliveRef` không giúp được
+    // gì vì nó chỉ chặn `save()`), cleanup mô phỏng unmount của StrictMode
+    // gọi `flush()` NGAY LÚC MOUNT, trước khi `loadProgress` (bất đồng bộ)
+    // của lượt effect restore đầu tiên kịp resolve — ghi đè bản ghi bằng
+    // trạng thái RỖNG của `engine` lúc đó (filledCount=0, activeSeconds=0).
+    await waitFor(async () => {
+      const saved = await loadProgress('p1')
+      expect(saved?.filledCount).toBe(1)
+      expect(saved?.activeSeconds).toBe(42)
     })
   })
 })

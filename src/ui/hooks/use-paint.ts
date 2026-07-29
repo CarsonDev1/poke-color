@@ -59,18 +59,38 @@ export function usePaint(
   const [saveError, setSaveError] = useState<string | null>(null)
   const activeSeconds = useRef(0)
 
-  // Cờ sống của CHÍNH component gọi hook này (khác với biến `alive` cục bộ
-  // trong effect nạp tiến độ bên dưới, vốn chỉ chặn MỘT lượt loadProgress cụ
-  // thể) — dùng để phân biệt "component đã unmount, lượt ghi này chỉ còn là
-  // continuation lạc lối" khỏi "đang cố tình flush lúc dọn dẹp/pagehide" (xem
-  // `save` so với `flush` ngay dưới). `false` một lần khi unmount, không bao
-  // giờ đặt lại true — mỗi lần mount là một ref mới.
-  const aliveRef = useRef(true)
-  useEffect(() => {
-    return () => {
-      aliveRef.current = false
-    }
-  }, [])
+  // Đã ỔN ĐỊNH lượt phục hồi tiến độ đã lưu (nếu có) chưa — false cho tới khi
+  // effect nạp tiến độ bên dưới SETTLE (dù tìm thấy bản ghi, không tìm thấy
+  // — puzzle hoàn toàn mới — hay đọc lỗi). `writeProgress` refuse ghi trong
+  // lúc còn false (xem gác ở đó).
+  //
+  // Đây là cơ chế THAY THẾ cho `aliveRef` (đã xoá): `aliveRef` cũ ghi
+  // `false` một lần lúc unmount với chú thích khẳng định "không bao giờ đặt
+  // lại true — mỗi lần mount là một ref mới", nhưng điều đó SAI — StrictMode
+  // (bật ở `src/main.tsx`) mô phỏng remount bằng cách unmount rồi mount lại
+  // component TRÊN CÙNG một fiber, nên `useRef` không hề được tạo lại;
+  // `aliveRef.current = false` của cleanup đầu tiên dính luôn cho suốt vòng
+  // đời component, biến `save()` (dùng `aliveRef`) thành no-op vĩnh viễn —
+  // tô cả buổi không có gì được ghi trừ khi `flush()` được gọi tường minh.
+  // Xoá `aliveRef` không chỉ vì nó sai: cái hiểm hoạ nó đặt ra (một
+  // continuation của `save()` chạy sau khi unmount) chưa từng được chứng
+  // minh gây hại — bản thân request ghi đã gửi đi đồng bộ trước bất kỳ
+  // `await` nào, một `save()` đang chạy dở vẫn cứ resolve dù component còn
+  // sống hay không, và React 19 lặng lẽ bỏ qua state update trên component đã
+  // unmount (không throw, không cảnh báo) — nên gác đó không ngăn được hại gì
+  // thật, chỉ phá chính tính năng ghi tiến độ.
+  //
+  // `restoredRef` giải quyết một vấn đề KHÁC hẳn: gác ghi cho tới khi ĐỌC
+  // xong, không phải theo dõi sống/chết. Đây chính là cơ chế sửa cả C-hazard
+  // "flush() xoá sạch tiến độ vừa phục hồi": effect dọn dẹp của `/play` gọi
+  // `flush()` ngay LÚC MOUNT dưới StrictMode (cleanup mô phỏng unmount chạy
+  // trước khi effect phục hồi tiến độ — bất đồng bộ — kịp resolve); nếu
+  // `flush()` cứ ghi ngay lúc đó, nó ghi đè bản ghi đã lưu bằng trạng thái
+  // RỖNG của `engine` (chưa restore gì) một cách không thể đảo ngược. Gác
+  // theo `restoredRef` biến lượt `flush()` sớm đó thành no-op thay vì một
+  // lượt ghi phá hoại — đúng trong test lẫn production, không chỉ dưới
+  // StrictMode.
+  const restoredRef = useRef(false)
 
   const bump = useCallback(() => setTick((t) => t + 1), [])
 
@@ -89,9 +109,20 @@ export function usePaint(
   // tô khi debounce chưa kịp chạy lúc đóng tab (không có unmount nào xảy ra).
   //
   // Tách riêng khỏi `save`/`flush` (thay vì để `flush` gọi thẳng `save`) vì
-  // hai hàm đó cần ứng xử KHÁC nhau với `aliveRef` — xem giải thích ở từng
-  // hàm — nhưng cả hai đều phải thực hiện đúng MỘT lượt ghi giống hệt nhau.
+  // đây là nơi DUY NHẤT thực hiện lượt ghi thật — `save`/`flush` giờ chỉ là
+  // hai tên gọi khác nhau cho CÙNG một hành động (xem giải thích ở từng hàm).
+  //
+  // Gác đầu tiên trên `restoredRef.current`: từ chối ghi cho tới khi lượt
+  // phục hồi tiến độ đã lưu (effect bên dưới) ỔN ĐỊNH. Đây là cơ chế sửa
+  // hazard "flush() xoá sạch tiến độ vừa phục hồi" (xem giải thích đầy đủ ở
+  // khai báo `restoredRef`): không có gác này, `flush()` gọi TRƯỚC khi
+  // restore xong (effect dọn dẹp của `/play` chạy đúng lúc StrictMode mô
+  // phỏng remount, hoặc — hiếm hơn nhưng vẫn có thật trong production — một
+  // cú click "Back" ngay tức khắc sau khi mở `/play`) ghi đè bản ghi đã lưu
+  // bằng trạng thái RỖNG của `engine` lúc đó (chưa kịp restore gì), xoá sạch
+  // filledCount/activeSeconds thật một cách không thể đảo ngược.
   const writeProgress = useCallback(async () => {
+    if (!restoredRef.current) return
     const complete = engine.isComplete()
     try {
       await saveProgress({
@@ -108,37 +139,21 @@ export function usePaint(
     }
   }, [engine, puzzleId])
 
-  /**
-   * Bản fire-and-forget mà `paint`/`reset` gọi ở mỗi lượt tô — có gác
-   * `aliveRef`: nếu lượt gọi này chỉ bắt đầu chạy SAU KHI component đã
-   * unmount (vd một ref cũ còn được giữ và gọi lại — xem test dùng
-   * `result.current` sau `unmount()`), nó không chạm gì tới `writeProgress`
-   * (và qua đó, không mở/đụng tới kết nối IndexedDB) nữa.
-   *
-   * Gác này KHÔNG (và không thể) huỷ được một lượt `save()` đã bắt đầu chạy
-   * TRƯỚC khi unmount xảy ra — bản thân yêu cầu ghi đã được gửi đi đồng bộ
-   * ngay khi `save()` bắt đầu (trước bất kỳ `await` nào), nên tới lúc unmount
-   * xảy ra thì yêu cầu đó đã nằm ngoài tầm với của bất kỳ cờ nào kiểm tra bên
-   * trong hàm này. Trường hợp đó vốn dĩ vô hại: `flush()` (effect dọn dẹp của
-   * `/play`, và listener `pagehide`) ghi lại đúng trạng thái CUỐI CÙNG của
-   * `engine` một lần nữa ngay lúc rời màn — bất kể lượt `save()` tự phát ở
-   * trên có kịp xong trước đó hay không, dữ liệu đúng vẫn luôn được đảm bảo
-   * bởi chính `flush()`, không phụ thuộc lượt ghi tự phát này.
-   */
+  /** Bản fire-and-forget mà `paint`/`reset` gọi ở mỗi lượt tô. */
   const save = useCallback(async () => {
-    if (!aliveRef.current) return
     await writeProgress()
   }, [writeProgress])
 
   /**
-   * Dùng khi cần đợi ghi xong xuôi (unmount, pagehide) — KHÔNG gác theo
-   * `aliveRef`: đây là lượt ghi CỐ Ý, muốn chạy dù component đã (hoặc đang)
-   * unmount — cả effect dọn dẹp của `/play` lẫn listener `pagehide` đều gọi
-   * thẳng `flush()` chứ không phải `save()` chính vì lý do này. Nếu `flush`
-   * cũng gác theo `aliveRef` (vd bằng cách gọi lại `save()`), effect dọn dẹp
-   * lúc unmount — vốn luôn chạy SAU khi `aliveRef.current` đã thành `false`
-   * — sẽ luôn bị chặn, xoá sạch tác dụng của I12 (đảm bảo tiến độ được ghi
-   * lúc rời màn/đóng tab).
+   * Dùng khi cần đợi ghi xong xuôi (unmount, pagehide) — cả effect dọn dẹp
+   * của `/play` lẫn listener `pagehide` bên dưới đều gọi thẳng `flush()`.
+   * Giống hệt `save()` (cả hai chỉ gọi `writeProgress`); tách tên riêng vẫn
+   * có giá trị tài liệu hoá: gọi `flush()` nói rõ ý "muốn đợi lượt ghi CUỐI
+   * hoàn tất trước khi rời màn", còn `save()` là lượt ghi fire-and-forget
+   * sau mỗi lượt tô. Trước đây (thời `aliveRef`, đã xoá) hai hàm này ứng xử
+   * khác nhau — `save` gác theo cờ sống, `flush` thì không, để effect dọn
+   * dẹp lúc unmount không bị tự chặn — nhưng `restoredRef` ở `writeProgress`
+   * là gác DUY NHẤT còn cần thiết, và nó áp dụng như nhau cho cả hai.
    */
   const flush = useCallback(async () => {
     await writeProgress()
@@ -159,19 +174,34 @@ export function usePaint(
   // nạp tiến độ đã lưu
   useEffect(() => {
     let alive = true
-    void loadProgress(puzzleId).then((rec) => {
-      if (!alive || !rec) return
-      const restored = new PaintEngine(puzzle.regions, rec.filled)
-      for (let i = 0; i < puzzle.regions.length; i++) {
-        if (restored.isFilled(i)) engine.tryPaint(i, puzzle.regions[i].colorIndex)
-      }
-      activeSeconds.current = rec.activeSeconds
-      bump()
-      // Đúng MỘT lần, sau khi restore xong — báo cho PaintCanvas vẽ lại toàn
-      // bộ layer base. Xem giải thích đầy đủ tại khai báo `revision` trong
-      // PaintState.
-      setRevision((r) => r + 1)
-    })
+    // Một puzzle MỚI (đổi `puzzleId`) bắt đầu lượt phục hồi riêng của nó —
+    // đóng lại "cửa" ghi cho tới khi lượt NÀY ổn định, đừng thừa hưởng nhầm
+    // trạng thái "đã phục hồi" của puzzle trước đó.
+    restoredRef.current = false
+    void loadProgress(puzzleId)
+      .then((rec) => {
+        // PHẢI đặt true kể cả khi `rec` là `undefined` (puzzle hoàn toàn
+        // mới, chưa từng lưu) — nếu không, `writeProgress` sẽ mãi mãi từ
+        // chối ghi và puzzle mới không bao giờ lưu được gì (xem `restoredRef`).
+        restoredRef.current = true
+        if (!alive || !rec) return
+        const restored = new PaintEngine(puzzle.regions, rec.filled)
+        for (let i = 0; i < puzzle.regions.length; i++) {
+          if (restored.isFilled(i)) engine.tryPaint(i, puzzle.regions[i].colorIndex)
+        }
+        activeSeconds.current = rec.activeSeconds
+        bump()
+        // Đúng MỘT lần, sau khi restore xong — báo cho PaintCanvas vẽ lại
+        // toàn bộ layer base. Xem giải thích đầy đủ tại khai báo `revision`
+        // trong PaintState.
+        setRevision((r) => r + 1)
+      })
+      .catch(() => {
+        // Đọc thất bại (vd IndexedDB bị chặn) — vẫn phải mở khoá ghi: nếu
+        // không, một lần đọc lỗi sẽ khoá ghi vĩnh viễn cho đúng puzzle đang
+        // cần được cứu dữ liệu nhất.
+        restoredRef.current = true
+      })
     return () => {
       alive = false
     }

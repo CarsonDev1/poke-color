@@ -11,9 +11,13 @@ import type { Puzzle, RegionMeta, Rgb } from '@/core/types'
 // test hiện có tiếp tục chạy với hành vi lưu thật. Chỉ những test I3 dưới đây
 // mới ghi đè một lần bằng `mockRejectedValueOnce` để mô phỏng IndexedDB từ
 // chối ghi (vd QuotaExceededError khi bộ nhớ trình duyệt đầy).
+//
+// `loadProgress` cũng được bọc (uỷ nhiệm y hệt bản thật) để `waitForRestore`
+// bên dưới lấy lại được ĐÚNG promise mà effect phục hồi tiến độ của
+// `usePaint` đã await — xem giải thích tại `waitForRestore`.
 vi.mock('@/data/local-cache', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/data/local-cache')>()
-  return { ...actual, saveProgress: vi.fn(actual.saveProgress) }
+  return { ...actual, saveProgress: vi.fn(actual.saveProgress), loadProgress: vi.fn(actual.loadProgress) }
 })
 
 /** 6×1: 3 vùng, màu 0, 1, 1 */
@@ -36,6 +40,38 @@ function silentSound(): SoundBoard {
     throw new Error('không có audio trong test')
   })
   return sb
+}
+
+/**
+ * Đợi lượt phục hồi tiến độ (effect nạp tiến độ đã lưu trong `usePaint`) ổn
+ * định — tức `restoredRef` của hook đã chuyển thành `true` — TRƯỚC KHI test
+ * gọi `paint`/`flush`. Cần thiết từ khi `writeProgress` gác ghi theo
+ * `restoredRef` (sửa hazard "flush() xoá sạch tiến độ vừa phục hồi", xem
+ * `use-paint.ts`): `renderHook` rồi `act(() => paint(0))` ngay lập tức (như
+ * mọi test ở đây từng làm) chạy TRƯỚC KHI `loadProgress` (bất đồng bộ) của
+ * effect restore kịp resolve, nên `save()` bên trong `paint()` bị gác thành
+ * no-op — đúng như production, chỉ khác là production luôn có đủ thời gian
+ * phản ứng của người dùng để lượt đọc đó resolve trước khi ai kịp tô.
+ *
+ * Lấy lại ĐÚNG cái promise mà effect restore đã `await` (qua
+ * `vi.mocked(loadProgress).mock.results`, có được vì `loadProgress` đã được
+ * bọc ở `vi.mock` phía trên) rồi tự `await` promise đó — không gọi
+ * `loadProgress` một lần MỚI. Vì đặc tả ECMAScript đảm bảo các phản ứng
+ * `.then()` gắn vào CÙNG một promise chạy theo đúng thứ tự đã gắn, và effect
+ * restore gắn `.then()` của nó lúc mount (trước khi test này có cơ hội chạy
+ * gì), `await` lại cùng promise ở đây đảm bảo phản ứng đó (đặt
+ * `restoredRef.current = true`) đã chạy xong trước khi hàm này trả về.
+ */
+async function waitForRestore(): Promise<void> {
+  const results = vi.mocked(loadProgress).mock.results
+  const last = results[results.length - 1]
+  if (!last) return
+  await act(async () => {
+    await last.value.catch(() => {
+      // Effect restore tự bắt lỗi này (catch riêng) và vẫn mở khoá
+      // `restoredRef` — không có gì để test này làm thêm.
+    })
+  })
 }
 
 beforeEach(async () => {
@@ -146,6 +182,7 @@ describe('usePaint', () => {
   it('flush ghi tiến độ xuống IndexedDB', async () => {
     const p = puzzle()
     const { result } = renderHook(() => usePaint('p1', p, silentSound()))
+    await waitForRestore()
     act(() => result.current.selectColor(0))
     act(() => result.current.paint(0))
     await act(async () => {
@@ -159,6 +196,7 @@ describe('usePaint', () => {
   it('I12: tô một vùng → lưu IndexedDB NGAY, không phải chờ debounce (debounce chỉ dành cho đẩy Supabase ở Plan 2, không phải ghi cục bộ — spec §8)', async () => {
     const p = puzzle()
     const { result } = renderHook(() => usePaint('p1', p, silentSound()))
+    await waitForRestore()
     act(() => result.current.selectColor(0))
     act(() => result.current.paint(0))
 
@@ -201,6 +239,7 @@ describe('usePaint', () => {
   it('nạp lại tiến độ đã lưu khi mount lại', async () => {
     const p = puzzle()
     const first = renderHook(() => usePaint('p1', p, silentSound()))
+    await waitForRestore()
     act(() => first.result.current.selectColor(0))
     act(() => first.result.current.paint(0))
     await act(async () => {
@@ -218,6 +257,7 @@ describe('usePaint', () => {
     const p = puzzle()
     vi.mocked(saveProgress).mockRejectedValueOnce(new Error('QuotaExceededError'))
     const { result } = renderHook(() => usePaint('p1', p, silentSound()))
+    await waitForRestore()
     act(() => result.current.selectColor(0))
     // Từ I12: `paint()` tự gọi `save()` NGAY (fire-and-forget), không còn
     // cần `flush()` tường minh để kích hoạt lượt ghi — `waitFor` đợi
@@ -231,6 +271,7 @@ describe('usePaint', () => {
     const p = puzzle()
     vi.mocked(saveProgress).mockRejectedValueOnce(new Error('lỗi tạm thời'))
     const { result } = renderHook(() => usePaint('p1', p, silentSound()))
+    await waitForRestore()
     act(() => result.current.selectColor(0))
     act(() => result.current.paint(0))
     await waitFor(() => expect(result.current.saveError).not.toBeNull())
@@ -243,6 +284,7 @@ describe('usePaint', () => {
   it('completedAt được ghi khi hoàn thành', async () => {
     const p = puzzle()
     const { result } = renderHook(() => usePaint('p1', p, silentSound()))
+    await waitForRestore()
     act(() => result.current.selectColor(0))
     act(() => result.current.paint(0))
     act(() => result.current.selectColor(1))
