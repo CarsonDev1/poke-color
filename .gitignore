@@ -5,3 +5,10 @@ dist/
 *.log
 .DS_Store
 .superpowers/
+
+# Tai nguyen trang tri sinh tu scripts/build_decor.py.
+#
+# KHONG commit: day la asset trich tu Pokemon Masters (Nintendo / The Pokemon
+# Company / DeNA) va repo nay public. Chay lai bang:
+#   python scripts/build_decor.py "D:/ss/poke-image"
+public/decor/

@@ -9,6 +9,7 @@ import {
   loadThumbnail,
   type PuzzleRecord,
 } from '@/data/local-cache'
+import { AmbientBackground, FloatingAccents } from '@/ui/components/decor'
 import { SyncBanner } from '@/ui/components/sync-banner'
 import { useDialogFocus } from '@/ui/dialog-focus'
 import { useSync } from '@/ui/hooks/use-sync'
@@ -137,6 +138,9 @@ export default function LibraryRoute() {
 
   return (
     <Shell>
+      {/* nen anime + icon troi: trang tri thuan, aria-hidden, khong an click */}
+      <AmbientBackground seed="library" />
+      <FloatingAccents seed="library" count={5} />
       <SyncBanner state={sync} />
 
       <motion.header

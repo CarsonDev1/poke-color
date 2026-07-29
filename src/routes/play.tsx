@@ -19,6 +19,7 @@ import { colorLabel } from '@/core/label-alphabet'
 import type { Puzzle } from '@/core/types'
 import { listPuzzles, loadOriginal, loadPuzzle, saveThumbnail } from '@/data/local-cache'
 import { CompletionBanner } from '@/ui/components/completion-banner'
+import { CelebrationBurst } from '@/ui/components/decor'
 import { PaintCanvas } from '@/ui/components/paint-canvas'
 import { PaletteBar } from '@/ui/components/palette-bar'
 import { SharePanel } from '@/ui/components/share-panel'
@@ -106,6 +107,7 @@ function PlayScreen({ puzzleId, puzzle, title }: { puzzleId: string; puzzle: Puz
   const [showShare, setShowShare] = useState(false)
   const [tool, setTool] = useState<'paint' | 'pan'>('paint')
   const [showDone, setShowDone] = useState(false)
+  const [burst, setBurst] = useState(false)
   // Nội dung của vùng aria-live dùng chung — cập nhật bởi CẢ hai nguồn: đổi
   // sau mỗi lượt tô (`paint.announcement`, đã có sẵn) LẪN đổi mỗi khi con trỏ
   // vùng của bàn phím di chuyển (I7). Tin nhắn mới nhất luôn thắng, đúng như
@@ -181,7 +183,10 @@ function PlayScreen({ puzzleId, puzzle, title }: { puzzleId: string; puzzle: Puz
   }, [puzzleId])
 
   useEffect(() => {
-    if (paint.isComplete) setShowDone(true)
+    if (paint.isComplete) {
+      setShowDone(true)
+      setBurst(true)
+    }
   }, [paint.isComplete])
 
   // Đẩy thông báo tiến độ (đã có sẵn) vào vùng aria-live dùng chung — bỏ qua
@@ -455,6 +460,12 @@ function PlayScreen({ puzzleId, puzzle, title }: { puzzleId: string; puzzle: Puz
           onCancel={() => setAskReset(false)}
         />
       )}
+
+      {/*
+        Burst chi chay MOT luot roi tu tat (`burst` ve false), khong lap: hieu ung
+        an mung lap vo han se che mat chinh buc tranh nguoi choi vua hoan thanh.
+      */}
+      <CelebrationBurst running={burst} onDone={() => setBurst(false)} />
 
       {showDone && paint.isComplete && (
         <CompletionBanner originalUrl={originalUrl} onClose={() => setShowDone(false)} />

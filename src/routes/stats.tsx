@@ -11,6 +11,7 @@ import {
   type PuzzleStat,
 } from '@/core/engine/stats'
 import { listActivity, listPuzzles, loadProgress } from '@/data/local-cache'
+import { AmbientBackground } from '@/ui/components/decor'
 import { Button } from '@/ui/primitives/button'
 import { Card } from '@/ui/primitives/card'
 import { PageTitle, Shell, Skeleton } from '@/ui/primitives/misc'
@@ -84,6 +85,7 @@ export default function StatsRoute() {
 
   return (
     <Shell className="max-w-4xl">
+      <AmbientBackground seed="stats" />
       <motion.header
         initial={{ opacity: 0, y: -12 }}
         animate={{ opacity: 1, y: 0 }}
