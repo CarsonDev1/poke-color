@@ -8,7 +8,6 @@ import { gzip } from '@/data/compress'
 import { decodeToRgba } from '@/data/decode-image'
 import { generateInWorker } from '@/data/generate-client'
 import { enqueueOutbox, newPuzzleId, savePuzzle } from '@/data/local-cache'
-import { AmbientBackground } from '@/ui/components/decor'
 import { Dropzone } from '@/ui/components/dropzone'
 import { PreviewCanvas } from '@/ui/components/preview-canvas'
 import { TunePanel, type TuneValue } from '@/ui/components/tune-panel'
@@ -143,7 +142,6 @@ export default function NewPuzzleRoute() {
 
   return (
     <Shell>
-      <AmbientBackground seed="new" />
       <motion.div
         initial={{ opacity: 0, y: -12 }}
         animate={{ opacity: 1, y: 0 }}

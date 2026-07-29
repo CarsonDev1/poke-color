@@ -29,7 +29,6 @@ import {
 } from '@/data/local-cache'
 import { rgbCss } from '@/render/layers'
 import { useDialogFocus } from '@/ui/dialog-focus'
-import { AmbientBackground } from '@/ui/components/decor'
 import { Button } from '@/ui/primitives/button'
 import { Card } from '@/ui/primitives/card'
 import { Badge, PageTitle, Shell } from '@/ui/primitives/misc'
@@ -254,7 +253,6 @@ export default function EditRoute() {
 
   return (
     <Shell className="max-w-4xl">
-      <AmbientBackground seed={id} />
       <motion.header
         initial={{ opacity: 0, y: -12 }}
         animate={{ opacity: 1, y: 0 }}

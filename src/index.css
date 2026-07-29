@@ -60,8 +60,8 @@ body {
   font-family: var(--font-sans);
   color: var(--color-slate-800);
   /*
-    Nền dự phòng khi CHƯA có ảnh nào tải xong (và cho những trang không gắn
-    AmbientBackground) — không có nó thì màn hình loé trắng trơn một nhịp.
+    Nền dự phòng cho lúc ảnh nền chưa tải xong — không có nó thì màn hình loé
+    trắng trơn một nhịp trước khi ảnh hiện.
   */
   background:
     radial-gradient(60rem 40rem at 12% -10%, oklch(0.66 0.24 340 / 0.1), transparent 60%),

@@ -76,7 +76,12 @@ export function AmbientBackground({
   return (
     <div
       aria-hidden
-      className={cn('pointer-events-none fixed inset-0 -z-10 overflow-hidden', className)}
+      // print:hidden BAT BUOC: nen gio o goc app nen no nam ngoai khoi `screen-only`
+        // cua /print — khong an thi anh nen se in ra giay.
+        className={cn(
+          'pointer-events-none fixed inset-0 z-0 overflow-hidden print:hidden',
+          className,
+        )}
     >
       {/*
         `key={src}` để mỗi ảnh là một phần tử RIÊNG — nhờ vậy AnimatePresence

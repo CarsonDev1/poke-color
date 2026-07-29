@@ -22,7 +22,6 @@ import type { Puzzle } from '@/core/types'
 import { listPuzzles, loadOriginal, loadPuzzle, saveThumbnail } from '@/data/local-cache'
 import { BackgroundMusic, useBgmEnabled } from '@/ui/components/bgm'
 import { CompletionBanner } from '@/ui/components/completion-banner'
-import { AmbientBackground } from '@/ui/components/decor'
 import { PaintCanvas } from '@/ui/components/paint-canvas'
 import { PaletteBar } from '@/ui/components/palette-bar'
 import { SharePanel } from '@/ui/components/share-panel'
@@ -273,8 +272,6 @@ function PlayScreen({ puzzleId, puzzle, title }: { puzzleId: string; puzzle: Puz
       browser mobile co giãn và `vh` sẽ tính theo lúc nó đang ẩn.
     */
     <div className="grid h-[100dvh] grid-rows-[auto_1fr_auto] overflow-hidden">
-      {/* nen anime doi moi 5 phut — hien qua header/dock trong mo */}
-      <AmbientBackground seed={puzzleId} />
       <motion.header
         initial={{ y: -16, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}

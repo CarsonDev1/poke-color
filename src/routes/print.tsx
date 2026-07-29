@@ -8,7 +8,6 @@ import type { PuzzleRecord } from '@/data/local-cache'
 import { gunzip } from '@/data/compress'
 import { loadBlobs, loadPuzzleRecord } from '@/data/local-cache'
 import { vectorizeInWorker } from '@/data/vectorize-client'
-import { AmbientBackground } from '@/ui/components/decor'
 import { Button } from '@/ui/primitives/button'
 import { Card } from '@/ui/primitives/card'
 import { PageTitle, Shell } from '@/ui/primitives/misc'
@@ -135,8 +134,6 @@ export default function PrintRoute() {
       <style>{PRINT_CSS}</style>
 
       <Shell className="screen-only max-w-4xl">
-        {/* screen-only: @media print an ca khoi nay nen nen khong len giay */}
-        <AmbientBackground seed="print" />
         <motion.header
           initial={{ opacity: 0, y: -12 }}
           animate={{ opacity: 1, y: 0 }}

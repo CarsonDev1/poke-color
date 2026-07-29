@@ -17,5 +17,6 @@ export const DECOR_BG: readonly string[] = [
   '/decor/bg/bg008.webp',
   '/decor/bg/bg009.webp',
   '/decor/bg/bg010.webp',
+  '/decor/bg/bg011.webp',
 ]
 
