@@ -217,6 +217,19 @@ export async function loadOriginal(id: string): Promise<Blob | undefined> {
   return (await (await db()).get('blobs', id))?.original
 }
 
+/** Cả ba blob của một puzzle — dùng khi đẩy lên Supabase Storage. */
+export async function loadBlobs(
+  id: string,
+): Promise<{ binGz: Uint8Array; regionsGz: Uint8Array; original: Blob } | undefined> {
+  const rec = await (await db()).get('blobs', id)
+  if (!rec) return undefined
+  return { binGz: rec.binGz, regionsGz: rec.regionsGz, original: rec.original }
+}
+
+export async function loadPuzzleRecord(id: string): Promise<PuzzleRecord | undefined> {
+  return (await db()).get('puzzles', id)
+}
+
 /** xoá sạch mọi thứ liên quan tới puzzle này */
 export async function deletePuzzle(id: string): Promise<void> {
   const d = await db()

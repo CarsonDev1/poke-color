@@ -5,7 +5,7 @@ import { DEFAULT_PARAMS, PRESETS, STAGE_LABELS, type PipelineParams, type Pipeli
 import { gzip } from '@/data/compress'
 import { decodeToRgba } from '@/data/decode-image'
 import { generateInWorker } from '@/data/generate-client'
-import { newPuzzleId, savePuzzle } from '@/data/local-cache'
+import { enqueueOutbox, newPuzzleId, savePuzzle } from '@/data/local-cache'
 import { Dropzone } from '@/ui/components/dropzone'
 import { PreviewCanvas } from '@/ui/components/preview-canvas'
 import { TunePanel, type TuneValue } from '@/ui/components/tune-panel'
@@ -116,6 +116,13 @@ export default function NewPuzzleRoute() {
         await gzip(new TextEncoder().encode(draft.regionsJson)),
         file,
       )
+      // Đánh dấu cần đẩy lên. Bọc try riêng: lưu cục bộ đã xong nên KHÔNG được
+      // để lỗi đánh dấu làm người dùng tưởng việc lưu thất bại.
+      try {
+        await enqueueOutbox('puzzle', id)
+      } catch {
+        // bỏ qua — chưa đăng nhập thì cũng chẳng đẩy được
+      }
       navigate(`/play/${id}`)
     } catch (err) {
       // Không bắt ở đây thì đây là unhandled rejection: `gzip` ném trên

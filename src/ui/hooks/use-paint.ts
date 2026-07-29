@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { SoundBoard } from '@/audio/synth'
 import { PaintEngine, type PaintResult } from '@/core/engine/paint-engine'
 import type { Puzzle } from '@/core/types'
-import { loadProgress, saveProgress } from '@/data/local-cache'
+import { enqueueOutbox, loadProgress, saveProgress } from '@/data/local-cache'
 
 export interface PaintState {
   engine: PaintEngine
@@ -134,6 +134,14 @@ export function usePaint(
         updatedAt: Date.now(),
       })
       setSaveError(null)
+      // Đánh dấu cần đẩy lên SAU khi ghi local thành công. Outbox khoá theo
+      // [kind, puzzleId] nên tô 200 vùng vẫn chỉ để lại một việc chờ. Lỗi ở đây
+      // không được làm hỏng việc tô: mất mạng/chưa đăng nhập vẫn phải chơi được.
+      try {
+        await enqueueOutbox('progress', puzzleId)
+      } catch {
+        // không sao — lần ghi tiến độ sau sẽ đánh dấu lại
+      }
     } catch {
       setSaveError('Không lưu được tiến độ — bộ nhớ trình duyệt có thể đã đầy.')
     }

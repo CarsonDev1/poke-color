@@ -7,7 +7,10 @@ import {
   loadThumbnail,
   type PuzzleRecord,
 } from '@/data/local-cache'
+import { SyncBanner } from '@/ui/components/sync-banner'
 import { useDialogFocus } from '@/ui/dialog-focus'
+import { useSession } from '@/ui/hooks/use-session'
+import { useSync } from '@/ui/hooks/use-sync'
 
 interface Card {
   rec: PuzzleRecord
@@ -16,6 +19,8 @@ interface Card {
 }
 
 export default function LibraryRoute() {
+  const { session } = useSession()
+  const sync = useSync()
   const [cards, setCards] = useState<Card[] | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [actionError, setActionError] = useState<string | null>(null)
@@ -113,8 +118,12 @@ export default function LibraryRoute() {
 
   return (
     <main style={{ maxWidth: 1100, margin: '0 auto', padding: 24 }}>
-      <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+      <SyncBanner state={sync} />
+      <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
         <h1>Thư viện tranh</h1>
+        <Link to="/login" style={{ fontSize: 14 }}>
+          {session ? (session.email || 'Tài khoản') : 'Đăng nhập'}
+        </Link>
         {/*
           Chỉ hiện link "Tạo tranh mới" ở header khi danh sách KHÔNG rỗng.
           Khi rỗng, khối trạng thái rỗng bên dưới đã có link cùng tên rồi —
