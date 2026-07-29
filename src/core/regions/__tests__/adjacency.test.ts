@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { buildAdjacency, longestNeighbor } from '@/core/regions/adjacency'
+import { buildAdjacency, longestNeighbor, longestNeighborWhere } from '@/core/regions/adjacency'
 import { labelRegions } from '@/core/regions/connected-components'
 import type { RegionField } from '@/core/types'
 
@@ -105,5 +105,42 @@ describe('longestNeighbor', () => {
     const f = field(['aa', 'aa'])
     const adj = buildAdjacency(f)
     expect(longestNeighbor(adj, 0)).toBeNull()
+  })
+})
+
+describe('longestNeighborWhere', () => {
+  /**
+   * x kề: b (biên 4, dài nhất) và a (biên 2). Nếu loại b thì phải chọn a —
+   * KHÔNG phải trả null, và không phải bỏ qua điều kiện để lấy lại b.
+   */
+  const f = (): RegionField =>
+    field([
+      'aabb',
+      'xxbb',
+      'xxbb',
+    ])
+
+  it('không lọc gì ⇒ giống longestNeighbor', () => {
+    const ff = f()
+    const adj = buildAdjacency(ff)
+    const xId = ff.regionMap[1 * 4]
+    expect(longestNeighborWhere(adj, xId, () => true)).toBe(longestNeighbor(adj, xId))
+  })
+
+  it('loại láng giềng dài nhất ⇒ lấy cái dài thứ hai, không trả null', () => {
+    const ff = f()
+    const adj = buildAdjacency(ff)
+    const xId = ff.regionMap[1 * 4]
+    const aId = ff.regionMap[0]
+    const bId = ff.regionMap[2]
+
+    expect(longestNeighborWhere(adj, xId, (o) => o !== bId)).toBe(aId)
+  })
+
+  it('loại hết ⇒ null, để bên gọi hoãn sang lượt sau', () => {
+    const ff = f()
+    const adj = buildAdjacency(ff)
+    const xId = ff.regionMap[1 * 4]
+    expect(longestNeighborWhere(adj, xId, () => false)).toBeNull()
   })
 })

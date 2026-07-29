@@ -2,8 +2,7 @@ import { bilateral } from '@/core/filters/bilateral'
 import { median3x3 } from '@/core/filters/median'
 import { quantize } from '@/core/quantize/quantize'
 import { labelRegions } from '@/core/regions/connected-components'
-import { computeAnchors } from '@/core/regions/label-anchor'
-import { mergeSmallRegions } from '@/core/regions/merge-small'
+import { mergeSmallRegions, mergeUnlabellable } from '@/core/regions/merge-small'
 import { buildOutline } from '@/core/regions/outline'
 import { buildRegionRuns } from '@/core/regions/region-runs'
 import type { PuzzleBin } from '@/core/codec/puzzle-format'
@@ -16,7 +15,14 @@ import type {
   RgbaImage,
 } from '@/core/types'
 
-const BISECTION_MAX_ITERS = 6
+/**
+ * 20, không phải 6. `hi` khởi tạo cỡ w*h/target*4 — với 2000×1500 và target
+ * 4500 thì dải tìm kiếm là [1, 2664], và 6 vòng nhị phân trên dải đó không thể
+ * hội tụ: đo được nó trả 1756 vùng cho target 4500, và 7282 cho target 4500 ở
+ * preset sách. Mỗi vòng chỉ tốn ~300ms (labelRegions 88 + mergeSmall 219) nên
+ * +14 vòng ≈ +4.2s, rẻ so với 17s của median+quantize.
+ */
+const BISECTION_MAX_ITERS = 20
 const TARGET_TOLERANCE = 0.25
 
 export interface PipelineResult {
@@ -78,7 +84,14 @@ export function resizeToMaxDim(img: RgbaImage, maxDim: number): RgbaImage {
   return { data: out, width: w, height: h }
 }
 
-/** Stage 3 + 4 gói lại — đây là phần bisection lặp lại */
+/**
+ * Stage 3 + 4 gói lại — đây là phần bisection lặp lại.
+ *
+ * `minThickness = 2 * minLabelRadius` là điều kiện cần để vùng chứa nổi một ký
+ * tự. Nó nằm TRONG vòng bisection (chi phí 0ms) để số vùng mà bisection đo
+ * chính là số vùng cuối cùng — nếu lọc vùng mỏng sau khi bisection xong thì
+ * `targetRegions` sẽ hụt đúng bằng số vùng bị loại.
+ */
 function segmentAndMerge(
   labels: Uint8Array,
   width: number,
@@ -86,9 +99,10 @@ function segmentAndMerge(
   palette: readonly Rgb[],
   minArea: number,
   mergeDeltaE: number,
+  minLabelRadius: number,
 ): RegionField {
   const raw = labelRegions(labels, width, height)
-  return mergeSmallRegions(raw, palette, minArea, mergeDeltaE)
+  return mergeSmallRegions(raw, palette, minArea, mergeDeltaE, 2 * minLabelRadius)
 }
 
 /**
@@ -103,17 +117,18 @@ function bisectMinArea(
   palette: readonly Rgb[],
   targetRegions: number,
   mergeDeltaE: number,
+  minLabelRadius: number,
 ): { field: RegionField; minArea: number } {
   let lo = 1
   let hi = Math.max(2, Math.floor((width * height) / Math.max(1, targetRegions)) * 4)
 
-  let best = segmentAndMerge(labels, width, height, palette, lo, mergeDeltaE)
+  let best = segmentAndMerge(labels, width, height, palette, lo, mergeDeltaE, minLabelRadius)
   let bestMinArea = lo
   let bestErr = Math.abs(best.regions.length - targetRegions)
 
   for (let iter = 0; iter < BISECTION_MAX_ITERS; iter++) {
     const mid = Math.max(1, Math.floor((lo + hi) / 2))
-    const field = segmentAndMerge(labels, width, height, palette, mid, mergeDeltaE)
+    const field = segmentAndMerge(labels, width, height, palette, mid, mergeDeltaE, minLabelRadius)
     const count = field.regions.length
     const err = Math.abs(count - targetRegions)
 
@@ -177,6 +192,7 @@ export function runPipeline(
       palette,
       params.targetRegions,
       params.mergeDeltaE,
+      params.minLabelRadius,
     )
     field = r.field
     usedMinArea = r.minArea
@@ -191,13 +207,17 @@ export function runPipeline(
       palette,
       usedMinArea,
       params.mergeDeltaE,
+      params.minLabelRadius,
     )
   }
   emit('gop-vung-vun')
 
-  // Stage 5
+  // Stage 5 — gộp nốt vùng không đặt được nhãn RỒI mới đặt nhãn.
+  // mergeUnlabellable trả về field đã tính anchor, nên không gọi computeAnchors
+  // riêng nữa. Nếu để computeAnchors một mình thì 86% vùng không có số và người
+  // dùng không thể biết tô màu nào — xem kết quả đo ở Task 5 của Plan 2.
   emit('dat-so', 0)
-  const withAnchors = computeAnchors(field, params.minLabelRadius)
+  const withAnchors = mergeUnlabellable(field, params.minLabelRadius)
   emit('dat-so')
 
   // Stage 6

@@ -47,20 +47,35 @@ export function buildAdjacency(field: RegionField): Adjacency {
 }
 
 /**
- * Láng giềng có biên chung dài nhất. Tie-break theo id nhỏ hơn để kết quả
- * không phụ thuộc thứ tự chèn vào Map ⇒ deterministic.
+ * Láng giềng có biên chung dài nhất TRONG SỐ những cái `allow` cho phép.
+ * Tie-break theo id nhỏ hơn để kết quả không phụ thuộc thứ tự chèn vào Map
+ * ⇒ deterministic.
+ *
+ * Có `allow` để Stage 4 gộp vùng mỏng vào một vùng ĐỦ DÀY thay vì vào một vùng
+ * mỏng khác. Gộp mỏng-vào-mỏng làm union-find nối chuỗi A→B→C trong cùng một
+ * lượt và đổ sập cả vùng lớn thành một mảng: đo được 7282 vùng tụt còn 672.
  */
-export function longestNeighbor(adj: Adjacency, id: number): number | null {
+export function longestNeighborWhere(
+  adj: Adjacency,
+  id: number,
+  allow: (other: number) => boolean,
+): number | null {
   const m = adj.get(id)
   if (!m || m.size === 0) return null
 
   let bestId = -1
   let bestLen = -1
   for (const [other, len] of m) {
+    if (!allow(other)) continue
     if (len > bestLen || (len === bestLen && other < bestId)) {
       bestLen = len
       bestId = other
     }
   }
   return bestId === -1 ? null : bestId
+}
+
+/** Láng giềng có biên chung dài nhất, không lọc. */
+export function longestNeighbor(adj: Adjacency, id: number): number | null {
+  return longestNeighborWhere(adj, id, () => true)
 }

@@ -643,3 +643,84 @@ Không mục nào của §22 thiếu task. Median giữ 2 lượt — đúng spe
 **3. Type consistency** — `colorLabel(colorIndex: number): string` và `MAX_LABELLED_COLORS: number` dùng thống nhất ở T1–T4. `PresetName` thêm `'sach'` ở T3 và `TuneValue.preset` ở T4 nhận nó qua chính `PresetName` nên không thể lệch. `MAX_GOOD_REGIONS`/`MIN_GOOD_REGIONS` giữ nguyên tên.
 
 **Một điểm thứ tự bắt buộc:** T2 phải xong trước T3. Đảo lại thì `k` lên 24 trong khi bốn chỗ vẫn sinh `+1`, và tranh sẽ in `c`…`n` trong khi nút hiện `13`…`24`.
+
+---
+
+## Kết quả ĐO của Task 5 (số liệu thật, không phải dự đoán)
+
+Khung cảnh tổng hợp có texture, 1600×1200, `k=30`, chạy trên máy dev.
+
+**Chi phí từng stage** — `maxDim` 2000, k=30:
+
+| stage | ms | % |
+|---|---|---|
+| resize | 3 | ~0 |
+| median3x3 ×2 | 7690 | 44% |
+| quantize k=30 | 9059 | 52% |
+| labelRegions | 88 | 0.5% |
+| mergeSmall | 219 | 1% |
+| computeAnchors | 199 | 1% |
+
+**Bốn preset:**
+
+```
+de    k=10 target= 400 => vung=  122 mau=10 minArea= 300 nhan=  65(53%)  9061ms
+vua   k=16 target=1200 => vung=  262 mau=16 minArea= 100 nhan= 104(40%)  9770ms
+kho   k=24 target=3000 => vung= 5137 mau=24 minArea=   1 nhan= 255( 5%) 10617ms
+sach  k=30 target=4500 => vung= 7282 mau=30 minArea=   1 nhan= 652( 9%) 12395ms
+DEFAULT (2600x1950 -> 2000x1500): vung=1756 minArea=41 nhan=206  19687ms
+```
+
+**Đường cong minArea → số vùng** (minArea tường minh, không bisection):
+
+```
+minArea  vung   co-nhan  %nhan
+      1  7282      652      9%
+      2  5712      652     11%
+      3  4595      652     14%
+      4  4324      653     15%
+      8  3118      653     21%
+     16  2141      656     31%
+     41  1258      648     52%
+     64   523      143     27%
+```
+
+**Phân bố anchorR ở minArea=3 (4595 vùng):** anchorR 1 → 2220 vùng · 2 → 898 · 3 → 41 · 4 → 412 · 5–8 → 14 · ≥9 → 56.
+
+**smoothing:** `0 → 7282 vùng` · `2 → 458 vùng`. Bilateral xoá **94%** độ chi tiết — giả thuyết của §22 được chứng minh bằng số.
+
+### Ba phát hiện, hai trong đó là defect chặn
+
+**D1 — bisection không tìm nổi target (chặn).** `targetRegions` 4500 LÀ đạt được: minArea=3 cho 4595 vùng. Nhưng `BISECTION_MAX_ITERS = 6` là tìm nhị phân trên dải vài nghìn — không thể hội tụ. Nó trả 7282 (sach) và 1756 (default). Slider "độ chi tiết" nói dối người dùng ở cả hai đầu.
+
+**D2 — 86% vùng không có số (chặn).** Ở 4595 vùng chỉ 652 vùng có nhãn. Nguyên nhân KHÔNG phải vùng nhỏ mà là vùng **mỏng**: sliver 1×40px có area 40 nên sống sót mọi `minArea`, nhưng không chứa nổi một ký tự, không hiện được màu đã tô, và không bấm được trên điện thoại. Quét `minArea` 1→41 không bao giờ đưa tỉ lệ nhãn quá 52%, và giá phải trả là mất 3300 vùng. **`minArea` là đòn sai: nó lọc theo DIỆN TÍCH trong khi thứ quyết định vùng dùng được là BÁN KÍNH TRONG.** Vùng trong trang sách đều đặn nên vùng nào cũng có số.
+
+**D3 — thời gian (cần theo dõi).** 19.7s ở 2000×1500 trên máy dev, và 96% chi phí nằm ở median + quantize. Timeout 60s là mỏng cho điện thoại (3× chậm ⇒ ~60s+).
+
+### Task 7: điều kiện độ dày trong mergeSmallRegions
+
+**Files:** `src/core/regions/merge-small.ts`, test `src/core/__tests__/merge-small.test.ts`
+
+Điều kiện CẦN, rẻ, dùng dữ liệu đã có sẵn (area + bbox tính trong `rebuild`): vùng chứa được đường tròn bán kính r thì cả hai chiều bbox phải ≥ 2r. Thêm tham số `minThickness`, mặc định 0 để không đổi hành vi cũ:
+
+```ts
+const tooSmall = (r: RegionMeta): boolean =>
+  r.area < minArea ||
+  Math.min(r.maxX - r.minX + 1, r.maxY - r.minY + 1) < minThickness
+```
+
+Dùng CHUNG một predicate cho cả ba vòng (pass, force-merge) — hiện mỗi vòng tự viết lại `r.area < minArea`, và để chúng lệch nhau là cách chắc chắn sinh vòng lặp vô tận.
+
+Chi phí: **0ms**. Không gọi distance transform.
+
+### Task 8: mop-up chính xác sau bisection
+
+**Files:** `src/core/regions/merge-small.ts` (hàm mới `mergeUnlabellable`), `src/core/pipeline.ts`
+
+Điều kiện bbox ở Task 7 là CẦN chứ không ĐỦ — vùng hình chữ C có bbox to mà bán kính trong vẫn nhỏ. Sau khi bisection hội tụ, chạy tối đa 3 lượt: `computeAnchors` → gộp mọi vùng `!hasLabel` vào láng giềng biên dài nhất → rebuild. Đặt NGOÀI bisection vì mỗi lượt tốn ~420ms; trong bisection 20 vòng sẽ là 34s.
+
+### Task 9: ngân sách bisection và timeout
+
+**Files:** `src/core/pipeline.ts`, `src/data/generate-client.ts`
+
+`BISECTION_MAX_ITERS` 6 → 20. Mỗi vòng chỉ ~300ms (labelRegions 88 + mergeSmall 219) nên +14 vòng ≈ +4.2s — rẻ so với 17s của median+quantize. `PIPELINE_TIMEOUT_MS` 60_000 → 180_000 và sửa cả câu thông báo đang nói "60 giây".

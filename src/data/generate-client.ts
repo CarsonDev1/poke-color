@@ -1,7 +1,13 @@
 import { STAGE_LABELS, type PipelineParams, type PipelineStage, type Rgb } from '@/core/types'
 import type { GenerateRequest, GenerateResponse } from '@/worker/protocol'
 
-export const PIPELINE_TIMEOUT_MS = 60_000
+/**
+ * 180s, không phải 60s. Đo được ở maxDim 2000 / k 30: median3x3 ×2 tốn 7.7s và
+ * quantize k=30 tốn 9.1s — 96% tổng chi phí — cho ra ~20s trên máy dev. Điện
+ * thoại tầm trung chậm 3× là vượt 60s, và người dùng sẽ nhận thông báo
+ * "ảnh quá lớn" sai sự thật cho một ảnh hoàn toàn hợp lệ.
+ */
+export const PIPELINE_TIMEOUT_MS = 180_000
 
 export interface GenerateOutcome {
   bin: Uint8Array
@@ -21,7 +27,7 @@ export interface WorkerLike {
   /**
    * Worker crash (chunk hashed 404 sau redeploy, OOM kill, lỗi cú pháp trong
    * worker...) không bao giờ gọi `onmessage` — không gắn `onerror` thì sự
-   * kiện này rơi vào hư không và người dùng phải đợi hết 60 giây timeout để
+   * kiện này rơi vào hư không và người dùng phải đợi hết trọn timeout để
    * đọc "mất quá lâu... giảm kích thước ảnh", sai và vô dụng (spec §17 yêu
    * cầu báo đúng stage khi worker gặp sự cố).
    */
@@ -104,7 +110,7 @@ export function generateInWorker(
       finish(() =>
         reject(
           new Error(
-            'Tạo puzzle mất quá lâu (hơn 60 giây). Hãy giảm kích thước ảnh hoặc giảm số màu rồi thử lại.',
+            `Tạo puzzle mất quá lâu (hơn ${Math.round(timeoutMs / 1000)} giây). Hãy giảm kích thước ảnh hoặc giảm số màu rồi thử lại.`,
           ),
         ),
       )
