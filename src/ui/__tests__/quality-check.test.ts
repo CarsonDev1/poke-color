@@ -25,8 +25,15 @@ describe('checkQuality', () => {
     }
   })
 
-  it('ngưỡng khớp spec', () => {
-    expect(MAX_GOOD_REGIONS).toBe(2000)
+  it('ngưỡng khớp spec §22', () => {
+    expect(MAX_GOOD_REGIONS).toBe(8000)
     expect(MIN_GOOD_REGIONS).toBe(20)
+  })
+
+  // Test tuyệt đối, không qua hằng số: ngưỡng cũ 2000 nằm DƯỚI mặc định 4500,
+  // nên nếu ai hạ ngưỡng lại thì mọi puzzle sinh ở mặc định sẽ bị app tự tố là
+  // lỗi. Ba test trên dùng MAX_GOOD_REGIONS symbolic nên không bắt được việc đó.
+  it('4500 vùng — đúng mặc định mới — là ok, không cảnh báo', () => {
+    expect(checkQuality(4500).level).toBe('ok')
   })
 })

@@ -1,3 +1,4 @@
+import { MAX_LABELLED_COLORS } from '@/core/label-alphabet'
 import { PRESETS, type PresetName } from '@/core/types'
 
 export interface TuneValue {
@@ -37,7 +38,9 @@ export function TunePanel({
     <div style={{ display: 'grid', gap: 16 }}>
       <fieldset style={{ border: 0, padding: 0, margin: 0 }}>
         <legend style={{ fontWeight: 600, marginBottom: 8 }}>Độ khó</legend>
-        <div style={{ display: 'flex', gap: 12 }}>
+        {/* wrap: bốn nhãn cộng lại vượt một dòng — "Ngang sách (30 màu ·
+            ~4500 vùng)" là dài nhất. Không viết tắt nhãn để tránh gãy dòng. */}
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, rowGap: 8 }}>
           {(Object.keys(PRESETS) as PresetName[]).map((p) => (
             <label key={p} style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
               <input
@@ -62,7 +65,9 @@ export function TunePanel({
           aria-label="Số màu"
           type="range"
           min={6}
-          max={24}
+          // lấy từ hằng số, không viết cứng 30: trần slider không được lệch
+          // khỏi bảng nhãn, nếu không colorLabel() sẽ throw giữa lúc vẽ
+          max={MAX_LABELLED_COLORS}
           step={1}
           disabled={disabled}
           value={value.k}
@@ -75,9 +80,9 @@ export function TunePanel({
         <input
           aria-label="Độ chi tiết"
           type="range"
-          min={50}
-          max={2000}
-          step={50}
+          min={200}
+          max={6000}
+          step={100}
           disabled={disabled}
           value={value.targetRegions}
           onChange={(e) => tweak({ targetRegions: Number(e.target.value) })}

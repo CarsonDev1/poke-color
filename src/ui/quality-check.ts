@@ -1,5 +1,9 @@
-/** ngưỡng theo spec §17 */
-export const MAX_GOOD_REGIONS = 2000
+/**
+ * Ngưỡng theo spec §22, KHÔNG phải §17. Bản gốc đặt 2000 vì cho rằng vùng vụn
+ * là lỗi; trang sách tham chiếu chứng minh ngược lại — 4500 vùng là MỤC TIÊU.
+ * Để 2000 thì mọi puzzle sinh ở mặc định đều bị app tự tố là lỗi.
+ */
+export const MAX_GOOD_REGIONS = 8000
 export const MIN_GOOD_REGIONS = 20
 
 export type QualityVerdict =
