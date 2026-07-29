@@ -2380,6 +2380,10 @@ Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>"
 
 `src/core/regions/__tests__/distance-transform.test.ts`:
 
+> ⚠️ **Assertion dưới đây SAI — đã phát hiện và sửa lúc thực thi (final fix wave, Task giữ nguyên code triển khai).** Test `'biên ảnh cũng tính là biên vùng'` kỳ vọng `d[1 * 3 + 1]` gần bằng **1**, nhưng giá trị đúng là **2**. Vùng chiếm trọn ảnh 3×3, tâm ở toạ độ (1,1); khoảng cách chamfer tới biên NGOÀI vùng gần nhất (biên ảnh, vốn cũng tính là biên vùng — đúng như comment trong test) là **2** pixel theo cả bốn hướng trực giao, không phải 1. Công thức `(n+1)/2` cho khoảng-cách-tâm-tới-biên của một khối n×n đặc đã được neo sẵn bởi test `'tâm hình vuông 5×5 có khoảng cách 3'` ngay phía dưới trong CÙNG file này (n=5 ⇒ (5+1)/2=3, khớp code); áp cùng công thức cho n=3 ⇒ (3+1)/2=**2**. Bản thân assertion — không phải code triển khai `chamferDistance` ở Step 3 — là điểm sai lệch.
+>
+> Nếu thực thi lại task này, sửa `expect(d[1 * 3 + 1]).toBeCloseTo(1, 5)` thành `expect(d[1 * 3 + 1]).toBeCloseTo(2, 5)`.
+
 ```ts
 import { describe, expect, it } from 'vitest'
 import { chamferDistance } from '@/core/regions/distance-transform'
@@ -2428,13 +2432,7 @@ describe('chamferDistance', () => {
     const d = chamferDistance(mask, w, h)
     expect(d[3 * 7 + 3]).toBeCloseTo(3, 5)
   })
-```
 
-> ⚠️ **Assertion dưới đây SAI — đã phát hiện và sửa lúc thực thi (final fix wave, Task giữ nguyên code triển khai).** Test `'biên ảnh cũng tính là biên vùng'` kỳ vọng `d[1 * 3 + 1]` gần bằng **1**, nhưng giá trị đúng là **2**. Vùng chiếm trọn ảnh 3×3, tâm ở toạ độ (1,1); khoảng cách chamfer tới biên NGOÀI vùng gần nhất (biên ảnh, vốn cũng tính là biên vùng — đúng như comment trong test) là **2** pixel theo cả bốn hướng trực giao, không phải 1. Công thức `(n+1)/2` cho khoảng-cách-tâm-tới-biên của một khối n×n đặc đã được neo sẵn bởi test `'tâm hình vuông 5×5 có khoảng cách 3'` ngay phía trên trong CÙNG file này (n=5 ⇒ (5+1)/2=3, khớp code); áp cùng công thức cho n=3 ⇒ (3+1)/2=**2**. Bản thân assertion — không phải code triển khai `chamferDistance` ở Step 3 — là điểm sai lệch.
->
-> Nếu thực thi lại task này, sửa `expect(d[1 * 3 + 1]).toBeCloseTo(1, 5)` thành `expect(d[1 * 3 + 1]).toBeCloseTo(2, 5)`.
-
-```ts
   it('biên ảnh cũng tính là biên vùng', () => {
     // vùng chiếm trọn ảnh 3×3 ⇒ tâm cách biên 2 (công thức (n+1)/2, n=3),
     // không phải vô cực
@@ -9097,6 +9095,13 @@ Expected: FAIL — không resolve được `@/routes/play`
 - [ ] **Step 6: Implement route `/play`**
 
 `src/routes/play.tsx`:
+
+> ⚠️ **Annotation Task 28 tại điểm dùng `<PaintCanvas>` — được Task 27 trỏ tới.** Bản implement dưới đây (viết lúc lập plan) gọi `<PaintCanvas puzzle={puzzle} engine={paint.engine} ... />` KHÔNG có `key`/`revision`, và effect dọn dẹp lúc rời màn chỉ gọi thẳng `paintRef.current.flush()`. Final fix wave đã thêm HAI thứ mà bản dưới đây thiếu:
+>
+> 1. **`key={resetCount}`** trên `<PaintCanvas>` (kèm state `resetCount` tăng mỗi lần xác nhận "Tô lại từ đầu"): `PaintEngine.reset()` mutate bitset tại chỗ, không đổi tham chiếu `engine`, nên nếu không remount, layer base của `PaintCanvas` giữ nguyên màu đã tô cũ. Đây thay cho `getCanvasRef()` liệt kê ở Task 27 — API đó chưa từng được xây.
+> 2. **`revision={paint.revision}`** — sửa C1 (xem annotation đầy đủ ở Task 27, ngay chỗ liệt kê `getCanvasRef`): `usePaint` tăng `revision` đúng một lần sau khi phục hồi tiến độ đã lưu xong, và `PaintCanvas` đưa prop này vào dependency của `redrawAll` để vẽ lại layer base sau restore.
+>
+> Nếu thực thi lại task này, áp dụng cả hai cơ chế trên tại đúng JSX `<PaintCanvas ... />` ở Step 6 bên dưới, thay vì theo đúng chữ ký không `key`/`revision` như viết ở đây.
 
 ```tsx
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
