@@ -1,9 +1,11 @@
 import 'fake-indexeddb/auto'
 import { beforeEach, describe, expect, it } from 'vitest'
 import {
+  bumpActivity,
   countOutbox,
   dequeueOutbox,
   enqueueOutbox,
+  listActivity,
   listOutbox,
   listPuzzles,
   resetDatabaseForTests,
@@ -130,5 +132,104 @@ describe('nâng cấp v1 -> v2', () => {
     // và store mới hoạt động
     await enqueueOutbox('progress', 'cu-1')
     expect(await countOutbox()).toBe(1)
+  })
+})
+
+/**
+ * Nâng cấp v2 -> v3 (thêm store `activity`).
+ *
+ * Cùng lý do như test v1 -> v2: người dùng đã chạy bản có outbox nhưng chưa có
+ * activity. Đây là đường nâng cấp thật của họ, và máy dev luôn sạch nên không
+ * bao giờ đi qua nó.
+ */
+describe('nâng cấp v2 -> v3', () => {
+  function seedV2(): Promise<void> {
+    return new Promise((resolve, reject) => {
+      const req = indexedDB.open('pokemon-color', 2)
+      req.onupgradeneeded = () => {
+        const d = req.result
+        const puzzles = d.createObjectStore('puzzles', { keyPath: 'id' })
+        puzzles.createIndex('createdAt', 'createdAt')
+        d.createObjectStore('blobs', { keyPath: 'puzzleId' })
+        d.createObjectStore('progress', { keyPath: 'puzzleId' })
+        d.createObjectStore('thumbnails', { keyPath: 'puzzleId' })
+        d.createObjectStore('outbox', { keyPath: ['kind', 'puzzleId'] })
+      }
+      req.onsuccess = () => {
+        const d = req.result
+        const tx = d.transaction(['puzzles', 'outbox'], 'readwrite')
+        tx.objectStore('puzzles').put({
+          id: 'v2-1',
+          title: 'Puzzle từ bản v2',
+          createdAt: 2000,
+          width: 10,
+          height: 10,
+          colorCount: 4,
+          regionCount: 8,
+          palette: [],
+          params: {},
+          usedMinArea: 1,
+        })
+        tx.objectStore('outbox').put({ kind: 'progress', puzzleId: 'v2-1', queuedAt: 5 })
+        tx.oncomplete = () => {
+          d.close()
+          resolve()
+        }
+        tx.onerror = () => reject(tx.error)
+      }
+      req.onerror = () => reject(req.error)
+    })
+  }
+
+  it('dữ liệu v2 SỐNG SÓT (cả outbox) và store activity mới dùng được', async () => {
+    await resetDatabaseForTests()
+    await seedV2()
+
+    const puzzles = await listPuzzles()
+    expect(puzzles.map((p) => p.id)).toContain('v2-1')
+    // outbox của bản cũ không được mất
+    expect(await countOutbox()).toBe(1)
+
+    await bumpActivity('2026-07-29', 3, 120)
+    const act = await listActivity()
+    expect(act).toHaveLength(1)
+    expect(act[0]).toEqual({ day: '2026-07-29', regionsFilled: 3, activeSeconds: 120 })
+  })
+})
+
+describe('bumpActivity', () => {
+  beforeEach(async () => {
+    await resetDatabaseForTests()
+  })
+
+  it('cộng dồn regionsFilled qua nhiều lần gọi', async () => {
+    await bumpActivity('2026-07-29', 2, 10)
+    await bumpActivity('2026-07-29', 3, 20)
+    const [a] = await listActivity()
+    expect(a.regionsFilled).toBe(5)
+  })
+
+  /**
+   * activeSeconds là TỔNG tích luỹ của phiên chứ không phải phần tăng thêm, nên
+   * cộng sẽ nhân đôi mỗi lần autosave — mà autosave chạy ở MỖI lượt tô.
+   */
+  it('activeSeconds lấy MAX, không cộng dồn', async () => {
+    await bumpActivity('2026-07-29', 1, 100)
+    await bumpActivity('2026-07-29', 1, 150)
+    const [a] = await listActivity()
+    expect(a.activeSeconds).toBe(150)
+  })
+
+  it('activeSeconds nhỏ hơn không làm tụt giá trị đã có', async () => {
+    await bumpActivity('2026-07-29', 1, 150)
+    await bumpActivity('2026-07-29', 1, 20)
+    const [a] = await listActivity()
+    expect(a.activeSeconds).toBe(150)
+  })
+
+  it('ngày khác nhau là bản ghi khác nhau', async () => {
+    await bumpActivity('2026-07-28', 1, 10)
+    await bumpActivity('2026-07-29', 1, 10)
+    expect(await listActivity()).toHaveLength(2)
   })
 })

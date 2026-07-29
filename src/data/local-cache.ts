@@ -8,8 +8,8 @@ import { gunzip } from '@/data/compress'
 import type { PipelineParams, Puzzle, Rgb } from '@/core/types'
 
 const DB_NAME = 'pokemon-color'
-/** 2: thêm store `outbox` cho đồng bộ Supabase */
-const DB_VERSION = 2
+/** 2: thêm `outbox` cho đồng bộ Supabase · 3: thêm `activity` cho chuỗi ngày */
+const DB_VERSION = 3
 
 export interface PuzzleRecord {
   id: string
@@ -55,6 +55,8 @@ interface BlobRecord {
  * nhớ chỉ để vẽ một lưới thẻ (spec §16 cảnh báo đúng về chi phí này), và mỗi
  * lần autosave tiến độ (rất thường xuyên) sẽ phải ghi lại luôn cả những MB dữ
  * liệu không đổi đó.
+ *
+ * - `outbox`: danh sách việc chờ đẩy lên Supabase, xem `OutboxItem`.
  */
 /**
  * Một việc đang chờ đẩy lên Supabase.
@@ -70,12 +72,20 @@ export interface OutboxItem {
   queuedAt: number
 }
 
+/** hoạt động trong MỘT ngày local, khoá là `YYYY-MM-DD` */
+export interface ActivityRecord {
+  day: string
+  regionsFilled: number
+  activeSeconds: number
+}
+
 interface Schema extends DBSchema {
   puzzles: { key: string; value: PuzzleRecord; indexes: { createdAt: number } }
   blobs: { key: string; value: BlobRecord }
   progress: { key: string; value: ProgressRecord }
   thumbnails: { key: string; value: { puzzleId: string; blob: Blob } }
   outbox: { key: [string, string]; value: OutboxItem }
+  activity: { key: string; value: ActivityRecord }
 }
 
 let dbPromise: Promise<IDBPDatabase<Schema>> | null = null
@@ -99,6 +109,12 @@ function db(): Promise<IDBPDatabase<Schema>> {
         // đè, nên tô 200 vùng chỉ để lại MỘT mục chờ — và replay trở thành luỹ
         // đẳng theo cấu trúc, không phải nhờ khéo tay.
         d.createObjectStore('outbox', { keyPath: ['kind', 'puzzleId'] })
+      }
+      if (oldVersion < 3) {
+        // Ghi cục bộ chứ không chỉ dựa vào `daily_activity` trên Postgres: chuỗi
+        // ngày phải đúng cả khi CHƯA đăng nhập, vì app dùng được trọn vẹn ở chế
+        // độ đó.
+        d.createObjectStore('activity', { keyPath: 'day' })
       }
     },
   })
@@ -180,9 +196,14 @@ function randomUuidV4FromGetRandomValues(): string {
   return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`
 }
 
-export function newPuzzleId(): string {
+/** UUID v4 — dùng cho puzzle id và share token. Xem docblock hàm trên về fallback. */
+export function newUuid(): string {
   if (typeof crypto.randomUUID === 'function') return crypto.randomUUID()
   return randomUuidV4FromGetRandomValues()
+}
+
+export function newPuzzleId(): string {
+  return newUuid()
 }
 
 export async function savePuzzle(
@@ -287,4 +308,35 @@ export async function dequeueOutbox(
   puzzleId: string,
 ): Promise<void> {
   await (await db()).delete('outbox', [kind, puzzleId])
+}
+
+// ---------------------------------------------------------------- activity
+
+/**
+ * Cộng dồn hoạt động vào ngày `day`.
+ *
+ * Đọc-rồi-ghi trong MỘT transaction: hai lần tô gần nhau mà mỗi lần tự đọc rồi
+ * tự ghi sẽ khiến lần sau ghi đè lần trước (lost update) và số vùng bị đếm thiếu.
+ */
+export async function bumpActivity(
+  day: string,
+  regionsFilled: number,
+  activeSeconds: number,
+): Promise<void> {
+  const d = await db()
+  const tx = d.transaction('activity', 'readwrite')
+  const store = tx.objectStore('activity')
+  const cur = await store.get(day)
+  await store.put({
+    day,
+    regionsFilled: (cur?.regionsFilled ?? 0) + regionsFilled,
+    // activeSeconds là TỔNG tích luỹ của phiên, không phải phần tăng thêm, nên
+    // lấy max chứ không cộng — cộng sẽ nhân đôi mỗi lần autosave.
+    activeSeconds: Math.max(cur?.activeSeconds ?? 0, activeSeconds),
+  })
+  await tx.done
+}
+
+export async function listActivity(): Promise<ActivityRecord[]> {
+  return (await db()).getAll('activity')
 }

@@ -121,9 +121,10 @@ export default function LibraryRoute() {
       <SyncBanner state={sync} />
       <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
         <h1>Thư viện tranh</h1>
-        <Link to="/login" style={{ fontSize: 14 }}>
-          {session ? (session.email || 'Tài khoản') : 'Đăng nhập'}
-        </Link>
+        <span style={{ display: 'flex', gap: 12, fontSize: 14 }}>
+          <Link to="/stats">Thống kê</Link>
+          <Link to="/login">{session ? session.email || 'Tài khoản' : 'Đăng nhập'}</Link>
+        </span>
         {/*
           Chỉ hiện link "Tạo tranh mới" ở header khi danh sách KHÔNG rỗng.
           Khi rỗng, khối trạng thái rỗng bên dưới đã có link cùng tên rồi —

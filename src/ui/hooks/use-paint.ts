@@ -2,7 +2,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { SoundBoard } from '@/audio/synth'
 import { PaintEngine, type PaintResult } from '@/core/engine/paint-engine'
 import type { Puzzle } from '@/core/types'
-import { enqueueOutbox, loadProgress, saveProgress } from '@/data/local-cache'
+import { localDay } from '@/core/engine/stats'
+import { bumpActivity, enqueueOutbox, loadProgress, saveProgress } from '@/data/local-cache'
 
 export interface PaintState {
   engine: PaintEngine
@@ -91,6 +92,13 @@ export function usePaint(
   // lượt ghi phá hoại — đúng trong test lẫn production, không chỉ dưới
   // StrictMode.
   const restoredRef = useRef(false)
+  /**
+   * `filledCount` đã tính vào `activity` rồi. Cần mốc này để cộng phần TĂNG THÊM
+   * chứ không phải tổng — và nó phải được đặt lại bằng số vùng ĐÃ TÔ sau khi
+   * restore, nếu không lần tô đầu tiên sau khi mở lại puzzle sẽ cộng nhầm cả
+   * tiến độ cũ vào ngày hôm nay.
+   */
+  const lastCountedRef = useRef(0)
 
   const bump = useCallback(() => setTick((t) => t + 1), [])
 
@@ -142,6 +150,19 @@ export function usePaint(
       } catch {
         // không sao — lần ghi tiến độ sau sẽ đánh dấu lại
       }
+
+      // Ghi hoạt động theo NGÀY cho chuỗi ngày liên tiếp (§12). Cộng phần TĂNG
+      // THÊM, không phải tổng: writeProgress chạy ở mỗi lượt tô nên cộng tổng
+      // sẽ đếm mỗi vùng nhiều lần.
+      try {
+        const delta = engine.filledCount - lastCountedRef.current
+        if (delta > 0) {
+          lastCountedRef.current = engine.filledCount
+          await bumpActivity(localDay(Date.now()), delta, activeSeconds.current)
+        }
+      } catch {
+        // thống kê không quan trọng bằng tiến độ — thất bại thì bỏ qua
+      }
     } catch {
       setSaveError('Không lưu được tiến độ — bộ nhớ trình duyệt có thể đã đầy.')
     }
@@ -186,6 +207,7 @@ export function usePaint(
     // đóng lại "cửa" ghi cho tới khi lượt NÀY ổn định, đừng thừa hưởng nhầm
     // trạng thái "đã phục hồi" của puzzle trước đó.
     restoredRef.current = false
+    lastCountedRef.current = 0
     void loadProgress(puzzleId)
       .then((rec) => {
         // PHẢI đặt true kể cả khi `rec` là `undefined` (puzzle hoàn toàn
@@ -198,6 +220,9 @@ export function usePaint(
           if (restored.isFilled(i)) engine.tryPaint(i, puzzle.regions[i].colorIndex)
         }
         activeSeconds.current = rec.activeSeconds
+        // Mốc cho `activity`: những vùng này đã tô ở NGÀY KHÁC, không được cộng
+        // lại vào hôm nay khi người dùng tô tiếp.
+        lastCountedRef.current = engine.filledCount
         bump()
         // Đúng MỘT lần, sau khi restore xong — báo cho PaintCanvas vẽ lại
         // toàn bộ layer base. Xem giải thích đầy đủ tại khai báo `revision`

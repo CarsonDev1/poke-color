@@ -7,8 +7,10 @@ import { listPuzzles, loadOriginal, loadPuzzle, saveThumbnail } from '@/data/loc
 import { CompletionBanner } from '@/ui/components/completion-banner'
 import { PaintCanvas } from '@/ui/components/paint-canvas'
 import { PaletteBar } from '@/ui/components/palette-bar'
+import { SharePanel } from '@/ui/components/share-panel'
 import { useDialogFocus } from '@/ui/dialog-focus'
 import { usePaint } from '@/ui/hooks/use-paint'
+import { useSession } from '@/ui/hooks/use-session'
 import { makeThumbnail } from '@/ui/make-thumbnail'
 
 export default function PlayRoute() {
@@ -69,6 +71,8 @@ function PlayScreen({ puzzleId, puzzle, title }: { puzzleId: string; puzzle: Puz
   // fix I3 bỏ sót — xem effect tải ảnh gốc bên dưới).
   const [peekError, setPeekError] = useState<string | null>(null)
   const [askReset, setAskReset] = useState(false)
+  const [showShare, setShowShare] = useState(false)
+  const { session } = useSession()
   const [showDone, setShowDone] = useState(false)
   // Nội dung của vùng aria-live dùng chung — cập nhật bởi CẢ hai nguồn: đổi
   // sau mỗi lượt tô (`paint.announcement`, đã có sẵn) LẪN đổi mỗi khi con trỏ
@@ -234,7 +238,16 @@ function PlayScreen({ puzzleId, puzzle, title }: { puzzleId: string; puzzle: Puz
         <button type="button" onClick={() => setAskReset(true)}>
           Tô lại từ đầu
         </button>
+        <button type="button" onClick={() => setShowShare((v) => !v)}>
+          {showShare ? 'Ẩn chia sẻ' : 'Chia sẻ'}
+        </button>
       </header>
+
+      {showShare && (
+        <section style={{ border: '1px solid #cbd5e1', borderRadius: 8, padding: 12 }}>
+          <SharePanel puzzleId={puzzleId} signedIn={session !== null} />
+        </section>
+      )}
 
       <p aria-live="polite" style={{ position: 'absolute', width: 1, height: 1, overflow: 'hidden', clip: 'rect(0 0 0 0)' }}>
         {liveMessage}
