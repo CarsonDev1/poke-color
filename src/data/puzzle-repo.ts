@@ -1,7 +1,9 @@
+import type { PipelineParams, Rgb } from '@/core/types'
 import {
   dequeueOutbox,
   loadBlobs,
   loadPuzzleRecord,
+  savePuzzle,
   type PuzzleRecord,
 } from '@/data/local-cache'
 import { getSupabase } from '@/data/supabase'
@@ -104,6 +106,9 @@ export interface RemotePuzzle {
   height: number
   colorCount: number
   regionCount: number
+  /** cần để dựng PuzzleRecord khi tải về — thiếu là puzzle không mở được */
+  palette: Rgb[]
+  params: PipelineParams
   createdAt: number
 }
 
@@ -112,7 +117,9 @@ export async function listRemotePuzzles(ownerId: string): Promise<RemotePuzzle[]
     const supabase = await getSupabase()
     const { data, error } = await supabase
       .from('puzzles')
-      .select('id,title,width,height,color_count,region_count,created_at')
+      // palette + params BẮT BUỘC có ở đây: `savePuzzle` cần chúng để dựng
+      // PuzzleRecord, và không có thì puzzle tải về không mở được.
+      .select('id,title,width,height,color_count,region_count,palette,params,created_at')
       .eq('owner_id', ownerId)
       .order('created_at', { ascending: false })
 
@@ -124,10 +131,66 @@ export async function listRemotePuzzles(ownerId: string): Promise<RemotePuzzle[]
       height: Number(r.height),
       colorCount: Number(r.color_count),
       regionCount: Number(r.region_count),
+      palette: (r.palette ?? []) as Rgb[],
+      params: (r.params ?? {}) as PipelineParams,
       createdAt: Date.parse(String(r.created_at)) || 0,
     }))
   } catch {
     return []
+  }
+}
+
+/**
+ * TẢI một puzzle từ Supabase xuống IndexedDB.
+ *
+ * Đây là nửa còn thiếu của việc "đồng bộ": trước đó app chỉ ĐẨY LÊN, nên mở app
+ * ở browser khác hay điện thoại thì IndexedDB rỗng và không có gì đi lấy dữ liệu
+ * về — thư viện trống trơn dù server có đủ.
+ *
+ * Tải cả BA tệp rồi mới `savePuzzle`. Lưu một bản ghi khi còn thiếu tệp sẽ tạo ra
+ * một puzzle trong thư viện mà mở ra là lỗi — tệ hơn hẳn việc chưa có nó.
+ */
+export async function pullPuzzle(remote: RemotePuzzle, ownerId: string): Promise<boolean> {
+  const paths = storagePaths(ownerId, remote.id)
+  try {
+    const supabase = await getSupabase()
+    const storage = supabase.storage.from(BUCKET)
+
+    const [orig, bin, regions] = await Promise.all([
+      storage.download(paths.original),
+      storage.download(paths.puzzle),
+      storage.download(paths.regions),
+    ])
+    if (orig.error || bin.error || regions.error) return false
+    if (!orig.data || !bin.data || !regions.data) return false
+
+    const binGz = new Uint8Array(await bin.data.arrayBuffer())
+    const regionsGz = new Uint8Array(await regions.data.arrayBuffer())
+
+    await savePuzzle(
+      {
+        id: remote.id,
+        title: remote.title,
+        createdAt: remote.createdAt,
+        width: remote.width,
+        height: remote.height,
+        colorCount: remote.colorCount,
+        regionCount: remote.regionCount,
+        palette: remote.palette,
+        params: remote.params,
+        // `usedMinArea` chỉ dùng để hiện lại tham số đã sinh; params đã mang nó
+        usedMinArea:
+          typeof (remote.params as { minArea?: unknown }).minArea === 'number'
+            ? ((remote.params as { minArea: number }).minArea)
+            : 1,
+      },
+      binGz,
+      regionsGz,
+      orig.data,
+    )
+    return true
+  } catch {
+    return false
   }
 }
 

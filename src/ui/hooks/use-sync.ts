@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { drainOutbox } from '@/data/drain'
+import { drainOutbox, pullDown } from '@/data/drain'
 import { countOutbox } from '@/data/local-cache'
 import { SOLO_USER_ID } from '@/data/solo'
 
@@ -8,6 +8,12 @@ export interface SyncState {
   pending: number
   online: boolean
   syncing: boolean
+  /**
+   * Tăng mỗi khi một lượt đồng bộ KÉO ĐƯỢC dữ liệu mới về. Thư viện dùng nó làm
+   * tín hiệu nạp lại — không có tín hiệu này thì puzzle vừa tải xong nằm trong
+   * IndexedDB mà màn hình vẫn trống tới khi người dùng tự F5.
+   */
+  pulledAt: number
   /** đẩy ngay, không đợi sự kiện online */
   syncNow: () => void
 }
@@ -23,6 +29,7 @@ export function useSync(): SyncState {
     typeof navigator === 'undefined' ? true : navigator.onLine,
   )
   const [syncing, setSyncing] = useState(false)
+  const [pulledAt, setPulledAt] = useState(0)
 
   const refresh = useCallback(async () => {
     try {
@@ -35,7 +42,12 @@ export function useSync(): SyncState {
   const run = useCallback(async () => {
     setSyncing(true)
     try {
+      // ĐẨY trước rồi mới KÉO: đẩy trước thì việc tô ở máy này lên server đã,
+      // sau đó kéo về sẽ hợp nhất được cả hai phía. Kéo trước rồi đẩy thì lượt
+      // hợp nhất bỏ sót đúng những gì vừa tô ở máy này.
       await drainOutbox(SOLO_USER_ID)
+      const out = await pullDown(SOLO_USER_ID)
+      if (out.pulled > 0 || out.merged > 0) setPulledAt(Date.now())
     } finally {
       setSyncing(false)
       await refresh()
@@ -68,5 +80,5 @@ export function useSync(): SyncState {
     void run()
   }, [run])
 
-  return { pending, online, syncing, syncNow }
+  return { pending, online, syncing, pulledAt, syncNow }
 }

@@ -187,6 +187,8 @@ describe('listRemotePuzzles', () => {
             height: 20,
             color_count: 8,
             region_count: 99,
+            palette: [[1, 2, 3]],
+            params: { k: 8, minArea: 5 },
             created_at: '2026-03-04T05:06:07.000Z',
           },
         ],
@@ -202,6 +204,10 @@ describe('listRemotePuzzles', () => {
       height: 20,
       colorCount: 8,
       regionCount: 99,
+      // palette + params PHẢI có: `pullPuzzle` cần chúng để dựng PuzzleRecord,
+      // thiếu là puzzle tải về không mở được
+      palette: [[1, 2, 3]],
+      params: { k: 8, minArea: 5 },
       createdAt: Date.parse('2026-03-04T05:06:07.000Z'),
     })
   })

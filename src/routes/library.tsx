@@ -48,6 +48,9 @@ export default function LibraryRoute() {
     )
   }
 
+  // `sync.pulledAt` trong dependency: một lượt đồng bộ kéo puzzle mới về
+  // IndexedDB nhưng KHÔNG tự làm màn hình đổi — thiếu tín hiệu này thì người
+  // dùng phải tự F5 mới thấy, đúng triệu chứng "đã đồng bộ mà không hiện".
   useEffect(() => {
     let alive = true
     void reload()
@@ -73,7 +76,7 @@ export default function LibraryRoute() {
       for (const u of madeRef.current) URL.revokeObjectURL(u)
       madeRef.current = []
     }
-  }, [])
+  }, [sync.pulledAt])
 
   const remove = async (id: string): Promise<void> => {
     try {
