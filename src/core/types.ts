@@ -55,10 +55,13 @@ export interface RegionRuns {
 }
 
 export interface PipelineParams {
+  /** cạnh dài nhất sau normalize, 2000 để đủ pixel cho ~4500 vùng */
   maxDim: number
+  /** số màu, 6..30 — trần là MAX_LABELLED_COLORS, xem core/label-alphabet */
   k: number
   /** 'auto' ⇒ dò bằng bisection để số vùng ≈ targetRegions */
   minArea: number | 'auto'
+  /** 200..6000 */
   targetRegions: number
   /** số lượt bilateral, 0..3 */
   smoothing: number
@@ -67,21 +70,29 @@ export interface PipelineParams {
 }
 
 export const DEFAULT_PARAMS: PipelineParams = {
-  maxDim: 1400,
-  k: 12,
+  maxDim: 2000,
+  k: 24,
   minArea: 'auto',
-  targetRegions: 500,
-  smoothing: 2,
+  targetRegions: 4500,
+  // 0 lượt bilateral, KHÔNG phải 2 (spec §22): bilateral làm phẳng gradient rất
+  // tốt, và đó chính là thứ xoá texture nước/mây/cỏ tạo nên độ chi tiết ngang
+  // trang sách. Median 3x3 vẫn 2 lượt — nó diệt noise JPEG mà không phá cạnh,
+  // và Task 30 của Plan 1 (snap-to-window) đảm bảo nó không bịa màu.
+  smoothing: 0,
   mergeDeltaE: 6,
-  minLabelRadius: 7,
+  // 3px, không phải 7: ở 4500 vùng thì phần lớn vùng nhỏ hơn bán kính 7 và sẽ
+  // không có nhãn nào cả. Vùng quá nhỏ để in nhãn ở zoom 1 vẫn được bù bằng
+  // cỡ chữ theo scale khi zoom (xem render/label-layer).
+  minLabelRadius: 3,
 }
 
-export type PresetName = 'de' | 'vua' | 'kho'
+export type PresetName = 'de' | 'vua' | 'kho' | 'sach'
 
 export const PRESETS: Record<PresetName, Pick<PipelineParams, 'k' | 'targetRegions'>> = {
-  de: { k: 8, targetRegions: 200 },
-  vua: { k: 12, targetRegions: 500 },
-  kho: { k: 16, targetRegions: 1000 },
+  de: { k: 10, targetRegions: 400 },
+  vua: { k: 16, targetRegions: 1200 },
+  kho: { k: 24, targetRegions: 3000 },
+  sach: { k: 30, targetRegions: 4500 },
 }
 
 /** Puzzle hoàn chỉnh, đủ để chơi */

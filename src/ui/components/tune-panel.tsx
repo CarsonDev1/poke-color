@@ -11,6 +11,7 @@ const PRESET_LABELS: Record<PresetName, string> = {
   de: 'Dễ',
   vua: 'Vừa',
   kho: 'Khó',
+  sach: 'Ngang sách',
 }
 
 export function TunePanel({
