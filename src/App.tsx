@@ -3,6 +3,7 @@ import LibraryRoute from '@/routes/library'
 import LoginRoute from '@/routes/login'
 import NewPuzzleRoute from '@/routes/new'
 import PlayRoute from '@/routes/play'
+import PrintRoute from '@/routes/print'
 
 /**
  * Hash router, KHÔNG phải browser router: deploy static không có server
@@ -17,6 +18,7 @@ const router = createHashRouter([
   { path: '/login', element: <LoginRoute /> },
   { path: '/new', element: <NewPuzzleRoute /> },
   { path: '/play/:id', element: <PlayRoute /> },
+  { path: '/print/:id', element: <PrintRoute /> },
 ])
 
 export default function App() {
