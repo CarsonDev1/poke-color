@@ -1,5 +1,6 @@
 import { defineConfig } from 'vitest/config'
 import react from '@vitejs/plugin-react'
+import tailwindcss from '@tailwindcss/vite'
 import { fileURLToPath } from 'node:url'
 
 // `environmentMatchGlobs` was removed in Vitest 4 (silently ignored, not even a
@@ -14,7 +15,10 @@ const jsdomDirs = ['ui', 'routes', 'render', 'data', 'audio']
 const alias = { '@': fileURLToPath(new URL('./src', import.meta.url)) }
 
 export default defineConfig({
-  plugins: [react()],
+  // tailwind CHỈ ở config gốc (bản build), không thêm vào các project test bên
+  // dưới: test không render CSS thật, thêm plugin vào đó chỉ làm chậm mọi lượt
+  // chạy test mà không kiểm được gì thêm.
+  plugins: [react(), tailwindcss()],
   resolve: { alias },
   test: {
     projects: [

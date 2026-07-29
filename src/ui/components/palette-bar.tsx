@@ -1,5 +1,8 @@
+import { motion } from 'framer-motion'
+import { Check } from 'lucide-react'
 import { colorLabel } from '@/core/label-alphabet'
 import type { Rgb } from '@/core/types'
+import { cn } from '@/lib/utils'
 import { rgbCss } from '@/render/layers'
 
 export function PaletteBar({
@@ -14,10 +17,15 @@ export function PaletteBar({
   onSelect: (i: number) => void
 }) {
   return (
+    /*
+      Cuộn NGANG, không wrap xuống nhiều dòng: với 30 màu thì wrap tạo ra một
+      khối cao 3–4 hàng chiếm gần nửa màn hình điện thoại. Một dải cuộn ngang giữ
+      chiều cao cố định và vẫn tới được mọi màu.
+    */
     <div
       role="radiogroup"
       aria-label="Bảng màu"
-      style={{ display: 'flex', flexWrap: 'wrap', gap: 8, padding: 8 }}
+      className="flex gap-2 overflow-x-auto px-3 py-3 [scrollbar-width:thin]"
     >
       {palette.map((c, i) => {
         const left = remaining[i] ?? 0
@@ -25,42 +33,55 @@ export function PaletteBar({
         const active = selected === i
         // một biến cho cả aria-label và text hiển thị: hai chỗ không thể lệch
         const label = colorLabel(i)
+
         return (
-          <button
+          <motion.button
             key={i}
             type="button"
             role="radio"
             aria-checked={active}
-            // nút bị disabled thật, không chỉ mờ: chọn được một màu đã xong
-            // rồi bấm khắp tranh mà không gì xảy ra trông như app hỏng
+            // nút bị disabled THẬT, không chỉ mờ: chọn được một màu đã xong rồi
+            // bấm khắp tranh mà không gì xảy ra trông như app hỏng
             disabled={done}
             aria-label={done ? `Màu ${label}, đã tô xong` : `Màu ${label}, còn ${left} vùng`}
             onClick={() => onSelect(i)}
-            style={{
-              width: 52,
-              padding: 4,
-              borderRadius: 8,
-              border: active ? '3px solid #111827' : '1px solid #cbd5e1',
-              background: '#fff',
-              opacity: done ? 0.4 : 1,
-              cursor: done ? 'default' : 'pointer',
-            }}
+            whileTap={done ? undefined : { scale: 0.92 }}
+            animate={active ? { y: -6 } : { y: 0 }}
+            transition={{ type: 'spring', stiffness: 500, damping: 28 }}
+            className={cn(
+              'relative flex h-16 w-14 shrink-0 flex-col items-center justify-center gap-1',
+              'rounded-2xl border-2 transition-colors',
+              active
+                ? 'border-white bg-ink-800 shadow-glow'
+                : 'border-ink-700 bg-ink-850 hover:border-ink-600',
+              done && 'opacity-40',
+            )}
           >
             <span
               aria-hidden
-              style={{
-                display: 'block',
-                height: 26,
-                borderRadius: 4,
-                background: rgbCss(c),
-                border: '1px solid rgba(0,0,0,.15)',
-              }}
+              className="h-6 w-8 rounded-md border border-black/25"
+              style={{ background: rgbCss(c) }}
             />
-            <span style={{ fontSize: 12, fontWeight: 700 }}>{label}</span>
-            <span style={{ fontSize: 11, color: '#64748b', display: 'block' }}>
-              {done ? '✓' : left}
+            {/*
+              Nhãn để mono + tabular: nhãn chữ-số có bề rộng rất khác nhau
+              (`1` so với `m`), nên font tỉ lệ làm các nút trông xô lệch.
+            */}
+            <span className="font-mono text-[13px] font-bold leading-none text-white">
+              {label}
             </span>
-          </button>
+            <span className="text-[10px] leading-none text-ink-400">
+              {done ? <Check size={11} className="text-sun-400" /> : left}
+            </span>
+
+            {/* vòng sáng chạy quanh màu đang chọn */}
+            {active && (
+              <motion.span
+                layoutId="palette-ring"
+                transition={{ type: 'spring', stiffness: 400, damping: 30 }}
+                className="pointer-events-none absolute -inset-0.5 rounded-2xl ring-2 ring-neon-400"
+              />
+            )}
+          </motion.button>
         )
       })}
     </div>

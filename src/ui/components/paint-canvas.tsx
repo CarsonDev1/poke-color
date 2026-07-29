@@ -368,7 +368,8 @@ export function PaintCanvas({
         width,
         height,
         overflow: 'hidden',
-        background: '#e2e8f0',
+        // hoà vào nền tối của app; nền xám sáng cũ tạo một khối chói quanh tranh
+        background: 'oklch(0.2 0.035 275)',
         touchAction: 'none',
         outlineOffset: 2,
         // Con trỏ nói rõ đang ở công cụ nào — không có tín hiệu này thì người

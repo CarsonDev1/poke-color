@@ -11,3 +11,23 @@ import { cleanup } from '@testing-library/react'
 afterEach(() => {
   cleanup()
 })
+
+/**
+ * jsdom KHÔNG có ResizeObserver, và `/play` dùng nó để đo chỗ trống cho canvas.
+ * Thiếu nó thì effect ném `ReferenceError` và CẢ màn chơi không render — mọi
+ * truy vấn sau đó fail với "unable to find role", một thông báo không hề chỉ tới
+ * nguyên nhân thật.
+ *
+ * Stub không cần bắn callback: component tự gọi `measure()` một lần trước khi
+ * `observe`, nên kích thước ban đầu vẫn có (jsdom trả 0 cho mọi phép đo, và code
+ * đã kẹp bằng giá trị tối thiểu). Đây là polyfill cho môi trường TEST — mọi
+ * browser mà app nhắm tới đều có ResizeObserver.
+ */
+if (!('ResizeObserver' in globalThis)) {
+  class ResizeObserverStub implements ResizeObserver {
+    observe(): void {}
+    unobserve(): void {}
+    disconnect(): void {}
+  }
+  globalThis.ResizeObserver = ResizeObserverStub
+}

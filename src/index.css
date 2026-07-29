@@ -1,38 +1,102 @@
+@import 'tailwindcss';
+
+/*
+  Design system — "anime dark neon".
+  Tailwind v4 cấu hình bằng CSS (@theme), không có tailwind.config.js.
+
+  Chọn dark-first là quyết định có lý do, không theo mốt: tranh tô màu là những
+  mảng màu rực trên nền, và nền tối làm chúng nổi hơn hẳn. Trên nền trắng, một
+  vùng vàng nhạt gần như không phân biệt được với nền — chính là lý do bản cũ
+  trông bẹt và khó nhìn.
+*/
+@theme {
+  /* nền: xanh đêm, KHÔNG phải đen thuần — đen thuần cạnh màu neon gây quầng mắt */
+  --color-ink-950: oklch(0.16 0.03 275);
+  --color-ink-900: oklch(0.2 0.035 275);
+  --color-ink-850: oklch(0.24 0.038 275);
+  --color-ink-800: oklch(0.29 0.04 275);
+  --color-ink-700: oklch(0.38 0.04 275);
+  --color-ink-600: oklch(0.5 0.035 275);
+  --color-ink-400: oklch(0.68 0.025 275);
+  --color-ink-200: oklch(0.88 0.015 275);
+
+  /* nhấn chính: hồng magenta kiểu poster anime */
+  --color-neon-400: oklch(0.78 0.19 340);
+  --color-neon-500: oklch(0.7 0.23 340);
+  --color-neon-600: oklch(0.62 0.24 340);
+
+  /* nhấn phụ: cyan */
+  --color-aqua-400: oklch(0.83 0.14 200);
+  --color-aqua-500: oklch(0.75 0.16 200);
+
+  /* vàng cho tiến độ / thành tựu */
+  --color-sun-400: oklch(0.86 0.16 90);
+
+  --font-display: 'Baloo 2', 'Segoe UI', ui-rounded, system-ui, sans-serif;
+  --font-sans: 'Plus Jakarta Sans', 'Segoe UI', ui-sans-serif, system-ui, sans-serif;
+
+  --radius-xl2: 1.25rem;
+
+  --shadow-glow: 0 0 0 1px oklch(0.7 0.23 340 / 0.35), 0 0 24px oklch(0.7 0.23 340 / 0.28);
+  --shadow-glow-aqua: 0 0 0 1px oklch(0.75 0.16 200 / 0.35), 0 0 24px oklch(0.75 0.16 200 / 0.25);
+
+  --animate-float: float 6s ease-in-out infinite;
+  --animate-shimmer: shimmer 2.5s linear infinite;
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-8px); }
+}
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
 :root {
-  font-family: ui-sans-serif, system-ui, "Segoe UI", sans-serif;
-  color: #0f172a;
-  background: #ffffff;
+  color-scheme: dark;
+}
+
+body {
+  margin: 0;
+  font-family: var(--font-sans);
+  color: var(--color-ink-200);
+  background:
+    radial-gradient(60rem 40rem at 12% -10%, oklch(0.7 0.23 340 / 0.16), transparent 60%),
+    radial-gradient(50rem 35rem at 95% 0%, oklch(0.75 0.16 200 / 0.14), transparent 60%),
+    var(--color-ink-950);
+  background-attachment: fixed;
+  min-height: 100dvh;
 }
 
 * {
   box-sizing: border-box;
 }
 
-body {
-  margin: 0;
+/*
+  Viền focus PHẢI thấy được trên nền tối. Mặc định của browser là viền tối, gần
+  như vô hình ở đây — mà màn chơi bắt buộc dùng được hoàn toàn bằng bàn phím
+  (§21 mục 4), nên mất viền focus là mất luôn tiêu chí đó.
+*/
+:focus-visible {
+  outline: 2px solid var(--color-aqua-400);
+  outline-offset: 2px;
 }
 
-button {
-  font: inherit;
-  padding: 6px 12px;
-  border: 1px solid #cbd5e1;
-  border-radius: 8px;
-  background: #fff;
-  cursor: pointer;
+/*
+  Tôn trọng prefers-reduced-motion. App này cố tình nhiều hiệu ứng, nên với
+  người bật giảm chuyển động thì phải tắt THẬT, không chỉ giảm bớt.
+*/
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }
 
-button:disabled {
-  cursor: default;
-}
-
-a {
-  color: #1d4ed8;
-}
-
-input[type="text"],
-input:not([type]) {
-  font: inherit;
-  padding: 6px 8px;
-  border: 1px solid #cbd5e1;
-  border-radius: 8px;
-}
+/* thanh cuộn hoà vào nền tối thay vì một dải xám sáng chạy dọc trang */
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: var(--color-ink-900); }
+::-webkit-scrollbar-thumb { background: var(--color-ink-700); border-radius: 99px; }
+::-webkit-scrollbar-thumb:hover { background: var(--color-neon-600); }

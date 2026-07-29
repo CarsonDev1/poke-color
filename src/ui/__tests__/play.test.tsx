@@ -277,10 +277,17 @@ describe('PlayRoute', () => {
     renderPlay()
     await waitFor(() => expect(screen.getByText('Tranh thử')).toBeTruthy())
 
-    const btn = screen.getByRole('button', { name: /tắt tiếng|bật tiếng/i })
-    const before = btn.textContent
-    await userEvent.click(btn)
-    await waitFor(() => expect(screen.getByRole('button', { name: /tắt tiếng|bật tiếng/i }).textContent).not.toBe(before))
+    // Đọc TÊN KHẢ TRUY CẬP, không phải textContent: nút này chỉ có icon, nên
+    // trạng thái nằm ở aria-label. Đây cũng là thứ trình đọc màn hình nghe được,
+    // nên assertion này mạnh hơn bản cũ chứ không yếu đi — nếu nút không cập
+    // nhật trạng thái thì aria-label giữ nguyên và test vẫn fail.
+    const nameOf = (): string =>
+      screen.getByRole('button', { name: /tắt tiếng|bật tiếng/i }).getAttribute('aria-label') ?? ''
+
+    const before = nameOf()
+    expect(before).toMatch(/tắt tiếng|bật tiếng/i)
+    await userEvent.click(screen.getByRole('button', { name: /tắt tiếng|bật tiếng/i }))
+    await waitFor(() => expect(nameOf()).not.toBe(before))
   })
 
   it('"Tô lại từ đầu" cần xác nhận rồi mới xoá, và vẽ lại canvas từ đầu', async () => {
