@@ -5,11 +5,11 @@ import { formatDuration } from '@/core/engine/stats'
 /**
  * Bật/tắt chia sẻ một puzzle và hiện bảng hoàn thành (§11, §12).
  *
- * Chỉ hiện khi ĐÃ đăng nhập: chia sẻ cần một hàng trên Postgres và tệp trên
- * Storage, cả hai đều đòi `auth.uid()`. Chưa đăng nhập thì nói rõ lý do thay vì
- * hiện một nút bấm vào là lỗi.
+ * Chế độ một người dùng: không cần đăng nhập. Điều kiện duy nhất là puzzle đã
+ * được đẩy lên Supabase — chưa đẩy thì `enableShare` sẽ không tìm thấy hàng nào
+ * để gắn token.
  */
-export function SharePanel({ puzzleId, signedIn }: { puzzleId: string; signedIn: boolean }) {
+export function SharePanel({ puzzleId }: { puzzleId: string }) {
   const [token, setToken] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState(false)
@@ -18,10 +18,6 @@ export function SharePanel({ puzzleId, signedIn }: { puzzleId: string; signedIn:
   const [completions, setCompletions] = useState<Completion[]>([])
 
   useEffect(() => {
-    if (!signedIn) {
-      setLoading(false)
-      return
-    }
     let alive = true
     void (async () => {
       const t = await getShareToken(puzzleId)
@@ -33,7 +29,7 @@ export function SharePanel({ puzzleId, signedIn }: { puzzleId: string; signedIn:
     return () => {
       alive = false
     }
-  }, [puzzleId, signedIn])
+  }, [puzzleId])
 
   const link = token
     ? `${window.location.origin}${window.location.pathname}#/s/${token}`
@@ -73,13 +69,6 @@ export function SharePanel({ puzzleId, signedIn }: { puzzleId: string; signedIn:
     }
   }, [link])
 
-  if (!signedIn) {
-    return (
-      <p style={{ margin: 0, color: '#64748b', fontSize: 14 }}>
-        Đăng nhập để chia sẻ tranh này cho người khác tô.
-      </p>
-    )
-  }
   if (loading) return <p style={{ margin: 0 }}>Đang kiểm tra trạng thái chia sẻ…</p>
 
   return (

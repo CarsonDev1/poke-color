@@ -1,21 +1,23 @@
 import { useCallback, useEffect, useState } from 'react'
 import { drainOutbox } from '@/data/drain'
 import { countOutbox } from '@/data/local-cache'
-import { useSession } from '@/ui/hooks/use-session'
+import { SOLO_USER_ID } from '@/data/solo'
 
 export interface SyncState {
   /** số thay đổi chưa đẩy lên */
   pending: number
   online: boolean
   syncing: boolean
-  /** đăng nhập rồi thì mới có gì để đồng bộ */
-  signedIn: boolean
   /** đẩy ngay, không đợi sự kiện online */
   syncNow: () => void
 }
 
+/**
+ * Đồng bộ với Supabase — KHÔNG cần đăng nhập (chế độ một người dùng).
+ *
+ * Trước đây hook này gác theo session; giờ luôn đồng bộ dưới `SOLO_USER_ID`.
+ */
 export function useSync(): SyncState {
-  const { session } = useSession()
   const [pending, setPending] = useState(0)
   const [online, setOnline] = useState(() =>
     typeof navigator === 'undefined' ? true : navigator.onLine,
@@ -31,27 +33,25 @@ export function useSync(): SyncState {
   }, [])
 
   const run = useCallback(async () => {
-    if (!session) return
     setSyncing(true)
     try {
-      await drainOutbox(session.userId)
+      await drainOutbox(SOLO_USER_ID)
     } finally {
       setSyncing(false)
       await refresh()
     }
-  }, [session, refresh])
+  }, [refresh])
 
-  // đếm lại khi mount và khi đăng nhập/đăng xuất
   useEffect(() => {
     void refresh()
-  }, [refresh, session])
+  }, [refresh])
 
-  // Đẩy ngay khi vừa đăng nhập: người dùng có thể đã tô offline hàng chục vùng
-  // trước khi đăng nhập, và không có cú đẩy này thì phải đợi tới lần `online`
-  // kế tiếp — có thể không bao giờ xảy ra trong một session.
+  // Đẩy ngay khi mount và mỗi khi có mạng lại. Không có cú đẩy lúc mount thì
+  // những gì tô offline ở lần chạy trước phải đợi tới sự kiện `online` kế tiếp —
+  // có thể không bao giờ xảy ra nếu máy vốn đã online sẵn.
   useEffect(() => {
-    if (session && online) void run()
-  }, [session, online, run])
+    if (online) void run()
+  }, [online, run])
 
   useEffect(() => {
     const goOnline = (): void => setOnline(true)
@@ -68,5 +68,5 @@ export function useSync(): SyncState {
     void run()
   }, [run])
 
-  return { pending, online, syncing, signedIn: session !== null, syncNow }
+  return { pending, online, syncing, syncNow }
 }

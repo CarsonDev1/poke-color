@@ -10,7 +10,6 @@ import { PaletteBar } from '@/ui/components/palette-bar'
 import { SharePanel } from '@/ui/components/share-panel'
 import { useDialogFocus } from '@/ui/dialog-focus'
 import { usePaint } from '@/ui/hooks/use-paint'
-import { useSession } from '@/ui/hooks/use-session'
 import { makeThumbnail } from '@/ui/make-thumbnail'
 
 export default function PlayRoute() {
@@ -72,7 +71,6 @@ function PlayScreen({ puzzleId, puzzle, title }: { puzzleId: string; puzzle: Puz
   const [peekError, setPeekError] = useState<string | null>(null)
   const [askReset, setAskReset] = useState(false)
   const [showShare, setShowShare] = useState(false)
-  const { session } = useSession()
   const [showDone, setShowDone] = useState(false)
   // Nội dung của vùng aria-live dùng chung — cập nhật bởi CẢ hai nguồn: đổi
   // sau mỗi lượt tô (`paint.announcement`, đã có sẵn) LẪN đổi mỗi khi con trỏ
@@ -245,7 +243,7 @@ function PlayScreen({ puzzleId, puzzle, title }: { puzzleId: string; puzzle: Puz
 
       {showShare && (
         <section style={{ border: '1px solid #cbd5e1', borderRadius: 8, padding: 12 }}>
-          <SharePanel puzzleId={puzzleId} signedIn={session !== null} />
+          <SharePanel puzzleId={puzzleId} />
         </section>
       )}
 

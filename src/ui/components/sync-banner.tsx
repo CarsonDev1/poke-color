@@ -1,4 +1,3 @@
-import { Link } from 'react-router-dom'
 import type { SyncState } from '@/ui/hooks/use-sync'
 
 /**
@@ -9,24 +8,7 @@ import type { SyncState } from '@/ui/hooks/use-sync'
  * bỏ qua chính chỗ mà lát nữa sẽ báo lỗi thật.
  */
 export function SyncBanner({ state }: { state: SyncState }) {
-  const { pending, online, syncing, signedIn } = state
-
-  // Chưa đăng nhập mà có việc chờ: nói rõ dữ liệu chỉ ở máy này, vì đây là điều
-  // người dùng sẽ mất nếu xoá cache mà không hề biết.
-  if (!signedIn) {
-    if (pending === 0) return null
-    return (
-      <div role="status" style={wrap('#fef9c3', '#854d0e')}>
-        <span>
-          {pending} thay đổi chỉ lưu trong máy này.{' '}
-          <Link to="/login" style={{ color: '#854d0e', fontWeight: 600 }}>
-            Đăng nhập
-          </Link>{' '}
-          để đồng bộ sang thiết bị khác.
-        </span>
-      </div>
-    )
-  }
+  const { pending, online, syncing } = state
 
   if (!online) {
     return (
