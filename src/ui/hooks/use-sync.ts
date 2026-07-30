@@ -67,10 +67,22 @@ export function useSync(): SyncState {
       // ĐẨY trước rồi mới KÉO: đẩy trước thì việc tô ở máy này lên server đã,
       // sau đó kéo về sẽ hợp nhất được cả hai phía. Kéo trước rồi đẩy thì lượt
       // hợp nhất bỏ sót đúng những gì vừa tô ở máy này.
-      const drained = await drainOutbox(SOLO_USER_ID)
-      // Kẹt = còn việc chờ mà lượt này KHÔNG đẩy được cũng KHÔNG bỏ được cái nào.
-      setStuck(drained.remaining > 0 && drained.done === 0 && drained.dropped === 0)
+      let drained = await drainOutbox(SOLO_USER_ID)
       const out = await pullDown(SOLO_USER_ID)
+
+      /*
+        `pullDown` có thể phát hiện tranh chỉ có trong máy và xếp hàng đẩy lên —
+        nhưng lượt đẩy của chu kỳ này đã đi qua. Không đẩy thêm một lượt thì một
+        cú bấm "Đồng bộ ngay" chỉ xếp hàng chứ không đồng bộ, và người dùng thấy
+        số việc chờ TĂNG LÊN. Đúng một lượt thêm, không vòng lặp.
+      */
+      if (out.enqueued > 0) drained = await drainOutbox(SOLO_USER_ID)
+
+      // Kẹt = còn việc chờ mà lượt cuối KHÔNG đẩy được cũng KHÔNG bỏ được cái nào.
+      setStuck(drained.remaining > 0 && drained.done === 0 && drained.dropped === 0)
+      // CHỈ khi có dữ liệu MỚI VỀ. `enqueued` là việc đi RA, không đổi gì trên
+      // màn hình — báo hiệu ở đây chỉ khiến thư viện nạp lại vô ích (một test
+      // đếm số lần thu hồi URL thumbnail đã bắt đúng chỗ này).
       if (out.pulled > 0 || out.merged > 0) setPulledAt(Date.now())
     } finally {
       running.current = false

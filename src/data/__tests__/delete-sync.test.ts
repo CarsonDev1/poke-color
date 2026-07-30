@@ -7,6 +7,7 @@ import {
   listOutbox,
   listPuzzles,
   resetDatabaseForTests,
+  saveProgress,
   savePuzzle,
 } from '@/data/local-cache'
 import { deleteRemotePuzzle } from '@/data/puzzle-repo'
@@ -35,15 +36,29 @@ async function seedLocal(id: string): Promise<void> {
   )
 }
 
+async function seedProgress(id: string): Promise<void> {
+  await saveProgress({
+    puzzleId: id,
+    filled: new Uint8Array([0b101]),
+    filledCount: 2,
+    activeSeconds: 30,
+    completedAt: null,
+    updatedAt: 100,
+  })
+}
+
 /** client giả: server có `remoteIds`, ghi lại mọi lệnh xoá */
-function fakeClient(remoteIds: string[], opts: { deleteFails?: boolean } = {}) {
+function fakeClient(
+  remoteIds: string[],
+  opts: { deleteFails?: boolean; progressUpsertFails?: boolean } = {},
+) {
   const removed: string[][] = []
   const deletedRows: string[] = []
   const download = vi.fn(() =>
     Promise.resolve({ data: new Blob([new Uint8Array([1])]), error: null }),
   )
 
-  const makeBuilder = () => {
+  const makeBuilder = (table: string) => {
     const b: Record<string, unknown> = {}
     for (const m of ['select']) b[m] = () => b
     b.order = () =>
@@ -70,7 +85,13 @@ function fakeClient(remoteIds: string[], opts: { deleteFails?: boolean } = {}) {
       return b
     }
     b.maybeSingle = () => Promise.resolve({ data: null, error: null })
-    b.upsert = () => Promise.resolve({ error: null })
+    b.upsert = () =>
+      Promise.resolve({
+        error:
+          opts.progressUpsertFails && table === 'progress'
+            ? { code: '23503', message: 'violates foreign key constraint' }
+            : null,
+      })
     b.delete = () => {
       b._deleting = true
       return b
@@ -83,7 +104,7 @@ function fakeClient(remoteIds: string[], opts: { deleteFails?: boolean } = {}) {
     deletedRows,
     download,
     client: {
-      from: () => makeBuilder(),
+      from: (table: string) => makeBuilder(table),
       storage: {
         from: () => ({
           download,
@@ -301,5 +322,117 @@ describe('mục outbox KHÔNG BAO GIỜ đẩy được thì phải BỎ', () =>
     expect(await listOutbox()).toHaveLength(0)
     const again = await drainOutbox(OWNER)
     expect(again).toEqual({ done: 0, remaining: 0, dropped: 0 })
+  })
+})
+
+describe('tranh chỉ có trong máy — lỗi "bấm đồng bộ xong lại chưa đồng bộ"', () => {
+  /**
+   * Chuỗi nhân quả đo được trên bản chạy thật: thư viện có 5 tranh, server chỉ có
+   * 3. Hai tranh chưa bao giờ được đẩy lên, và `progress.puzzle_id` có khoá ngoại
+   * tới `puzzles`, nên đẩy tiến độ của chúng bị Postgres từ chối VĨNH VIỄN
+   * (23503 — xác minh bằng curl: HTTP 409 "Key is not present in table puzzles").
+   *
+   * Cái làm lỗi trở nên vô hình: drain `done++` bất kể đẩy được hay không, nên
+   * `remaining=1, done=1` ⇒ cờ `stuck` false ⇒ banner hiện lại "Chưa đồng bộ · 1
+   * thay đổi" y như chưa từng bấm.
+   */
+  it('đẩy tiến độ THẤT BẠI thì KHÔNG được đếm là xong', async () => {
+    await seedLocal('p1')
+    await seedProgress('p1')
+    await enqueueOutbox('progress', 'p1')
+    // upsert progress lỗi khoá ngoại; mọi thứ khác bình thường
+    setSupabaseForTests(fakeClient(['p1'], { progressUpsertFails: true }).client)
+
+    const out = await drainOutbox(OWNER)
+    expect(out.done).toBe(0)
+    expect(out.remaining).toBe(1)
+    expect(out.dropped).toBe(0)
+  })
+
+  it('đẩy tiến độ THÀNH CÔNG thì đếm là xong và outbox sạch', async () => {
+    await seedLocal('p1')
+    await seedProgress('p1')
+    await enqueueOutbox('progress', 'p1')
+    setSupabaseForTests(fakeClient(['p1']).client)
+
+    const out = await drainOutbox(OWNER)
+    expect(out.done).toBe(1)
+    expect(out.remaining).toBe(0)
+  })
+
+  /**
+   * Vá gốc rễ: không có bước này thì KHÔNG có gì trong hệ thống nhận ra khoảng
+   * chênh "máy có, server không". Outbox chỉ ghi ý định tại thời điểm tô, nên
+   * tranh tạo trước khi có chức năng đồng bộ thì mãi mãi không ai đẩy lên.
+   */
+  it('tranh máy có mà server không có ⇒ xếp hàng đẩy lên', async () => {
+    await seedLocal('chi-co-trong-may')
+    setSupabaseForTests(fakeClient([]).client) // server rỗng
+
+    const out = await pullDown(OWNER)
+    expect(out.enqueued).toBe(1)
+    const left = await listOutbox()
+    expect(left.map((o) => `${o.kind}:${o.puzzleId}`)).toContain('puzzle:chi-co-trong-may')
+  })
+
+  /**
+   * Đo trên Supabase thật: hàng `puzzles` + 3 tệp Storage lên đủ nhưng bảng
+   * `progress` RỖNG. Vòng lặp `remote` đọc danh sách server trước khi tranh này
+   * được đẩy lên, nên tiến độ của nó không ai hợp nhất — phải đợi lượt sau, và
+   * đổi máy ngay lúc đó là thấy 0% trên một bức đã tô dở.
+   */
+  it('xếp hàng luôn TIẾN ĐỘ, không chỉ tranh', async () => {
+    await seedLocal('chi-co-trong-may')
+    await seedProgress('chi-co-trong-may')
+    setSupabaseForTests(fakeClient([]).client)
+
+    await pullDown(OWNER)
+    const kinds = (await listOutbox())
+      .filter((o) => o.puzzleId === 'chi-co-trong-may')
+      .map((o) => o.kind)
+      .sort()
+    expect(kinds).toEqual(['progress', 'puzzle'])
+  })
+
+  it('tranh đã có trên server thì KHÔNG xếp hàng lại', async () => {
+    await seedLocal('p1')
+    setSupabaseForTests(fakeClient(['p1']).client)
+
+    const out = await pullDown(OWNER)
+    expect(out.enqueued).toBe(0)
+  })
+
+  /**
+   * Tranh đang CHỜ XOÁ cũng "chỉ có trong máy" theo nghĩa server còn nó. Nếu xếp
+   * hàng đẩy lên thì lệnh xoá và lệnh đẩy đánh nhau, và tranh vừa xoá sống lại.
+   */
+  it('tranh đang chờ xoá thì KHÔNG xếp hàng đẩy lên', async () => {
+    await seedLocal('p1')
+    await enqueueOutbox('delete', 'p1')
+    setSupabaseForTests(fakeClient([]).client)
+
+    const out = await pullDown(OWNER)
+    expect(out.enqueued).toBe(0)
+    const left = await listOutbox()
+    expect(left.map((o) => o.kind)).not.toContain('puzzle')
+  })
+})
+
+/**
+ * Ca độc thứ ba, do chính test phát hiện: mục 'progress' của một puzzle KHÔNG có
+ * bản ghi tiến độ. `syncProgress` thoát sớm ở `!local && !remote` mà không
+ * dequeue, nên mục nằm lại vĩnh viễn và banner không bao giờ tắt.
+ */
+describe("mục 'progress' mà máy không có tiến độ nào", () => {
+  it('là việc rỗng ⇒ BỎ, tính vào dropped, outbox sạch', async () => {
+    await seedLocal('p1') // CỐ Ý không seedProgress
+    await enqueueOutbox('progress', 'p1')
+    setSupabaseForTests(fakeClient(['p1']).client)
+
+    const out = await drainOutbox(OWNER)
+    expect(out.dropped).toBe(1)
+    expect(out.done).toBe(0)
+    expect(out.remaining).toBe(0)
+    expect(await listOutbox()).toHaveLength(0)
   })
 })

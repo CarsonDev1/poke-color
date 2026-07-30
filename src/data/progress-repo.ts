@@ -93,24 +93,52 @@ export async function pushProgress(rec: ProgressRecord, userId: string): Promise
   }
 }
 
+export interface SyncProgressResult {
+  merged: ProgressRecord | null
+  /**
+   * Đẩy lên server THÀNH CÔNG hay chưa.
+   *
+   * Bắt buộc phải trả ra ngoài: `drainOutbox` từng đếm mọi lượt gọi hàm này là
+   * "đã đẩy xong" bất kể kết quả, nên khi đẩy thất bại thì mục vẫn nằm trong
+   * outbox mà banner lại hiện "chưa đồng bộ · 1" như chưa từng thử — bấm mãi
+   * không đổi. Thất bại thường gặp nhất là LỖI KHOÁ NGOẠI: `progress.puzzle_id`
+   * trỏ tới `puzzles`, nên tiến độ của một tranh chưa được đẩy lên server sẽ bị
+   * từ chối vĩnh viễn (Postgres 23503).
+   */
+  pushed: boolean
+  /**
+   * KHÔNG có gì để đẩy: máy không có bản ghi tiến độ nào cho puzzle này (và
+   * server cũng không). Mục outbox này là việc rỗng nên bị xoá ngay.
+   *
+   * Không xoá thì nó là một mục KẸT VĨNH VIỄN nữa: hàm này thoát sớm ở đây mà
+   * không dequeue, `pending` không bao giờ về 0 và banner "chưa đồng bộ" hiện
+   * mãi. Xoá là an toàn — mục này chỉ có nghĩa "đẩy tiến độ cục bộ lên", mà tiến
+   * độ cục bộ không tồn tại; lúc người dùng tô lại thì nó tự được xếp hàng lại.
+   */
+  nothingToPush: boolean
+}
+
 /**
  * Hợp nhất tiến độ local và server rồi ghi về CẢ HAI phía.
  *
- * Thứ tự có chủ đích: ghi IndexedDB TRƯỚC khi đẩy lên. Nếu mạng chết giữa
- * đường thì máy vẫn giữ bản đã hợp nhất, và mục outbox còn nguyên để lần sau
- * thử lại. Đẩy trước rồi ghi local sau thì mạng chết là mất phần hợp nhất.
+ * Thứ tự có chủ đích: ghi IndexedDB TRƯỚC khi đẩy lên. Nếu mạng chết giữa đường
+ * thì máy vẫn giữ bản đã hợp nhất, và mục outbox còn nguyên để lần sau thử lại.
+ * Đẩy trước rồi ghi local sau thì mạng chết là mất phần hợp nhất.
  *
- * Chỉ xoá mục outbox khi đẩy THÀNH CÔNG.
+ * Chỉ xoá mục outbox khi đẩy THÀNH CÔNG — hoặc khi không có gì để đẩy.
  */
 export async function syncProgress(
   puzzleId: string,
   userId: string,
   regionCount: number,
-): Promise<ProgressRecord | null> {
+): Promise<SyncProgressResult> {
   const local = await loadProgress(puzzleId)
   const remote = await pullProgress(puzzleId, userId, regionCount)
 
-  if (!local && !remote) return null
+  if (!local && !remote) {
+    await dequeueOutbox('progress', puzzleId)
+    return { merged: null, pushed: false, nothingToPush: true }
+  }
 
   const merged =
     local && remote ? mergeProgress(local, remote, regionCount) : (local ?? remote)!
@@ -118,9 +146,10 @@ export async function syncProgress(
   // local trước, mạng sau
   await saveProgress(merged)
 
-  if (await pushProgress(merged, userId)) {
+  const pushed = await pushProgress(merged, userId)
+  if (pushed) {
     await dequeueOutbox('progress', puzzleId)
   }
 
-  return merged
+  return { merged, pushed, nothingToPush: false }
 }

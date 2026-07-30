@@ -1,5 +1,6 @@
 import {
   dequeueOutbox,
+  enqueueOutbox,
   listOutbox,
   listPuzzles,
   loadBlobs,
@@ -103,8 +104,21 @@ export async function drainOutbox(userId: string): Promise<DrainOutcome> {
         const r = await uploadPuzzle(item.puzzleId, userId)
         if (r.ok) done++
       } else {
-        await syncProgress(item.puzzleId, userId, rec.regionCount)
-        done++
+        /*
+          CHỈ đếm là xong khi thật sự đẩy được.
+
+          Chỗ này từng `done++` vô điều kiện. Hậu quả đúng như đã gặp trên bản
+          chạy thật: tiến độ của một tranh CHƯA CÓ trên server bị Postgres từ
+          chối vì lỗi khoá ngoại (23503 — `progress.puzzle_id` → `puzzles.id`),
+          `syncProgress` không dequeue, nhưng drain vẫn báo done=1. Vậy
+          `remaining=1, done=1, dropped=0` ⇒ cờ `stuck` là false ⇒ banner hiện
+          lại đúng câu "Chưa đồng bộ · 1 thay đổi" như chưa từng thử, và bấm bao
+          nhiêu lần cũng thế.
+        */
+        const r = await syncProgress(item.puzzleId, userId, rec.regionCount)
+        if (r.pushed) done++
+        // việc rỗng (không có tiến độ nào để đẩy) đã bị xoá — tính vào `dropped`
+        else if (r.nothingToPush) dropped++
       }
     } catch {
       // giữ trong outbox, thử lại lần sau
@@ -120,6 +134,13 @@ export interface PullOutcome {
   pulled: number
   /** số puzzle đã hợp nhất lại tiến độ */
   merged: number
+  /**
+   * Số puzzle CHỈ CÓ TRONG MÁY vừa được xếp hàng để đẩy lên.
+   *
+   * Người gọi cần con số này để chạy `drainOutbox` thêm một lượt: việc vừa xếp
+   * hàng thì lượt đẩy của chu kỳ này đã đi qua rồi.
+   */
+  enqueued: number
 }
 
 /**
@@ -140,6 +161,7 @@ export interface PullOutcome {
 export async function pullDown(userId: string): Promise<PullOutcome> {
   let pulled = 0
   let merged = 0
+  let enqueued = 0
 
   try {
     const [remote, local, outbox] = await Promise.all([
@@ -175,9 +197,47 @@ export async function pullDown(userId: string): Promise<PullOutcome> {
         // một puzzle lỗi không được chặn những cái còn lại
       }
     }
+
+    /*
+      CHIỀU CÒN LẠI: tranh chỉ có trong máy mà server không có ⇒ xếp hàng đẩy lên.
+
+      Không có bước này thì một tranh chưa từng được đẩy lên sẽ mắc kẹt mãi mãi,
+      và nó kéo theo đúng lỗi đã gặp: `progress.puzzle_id` có khoá ngoại tới
+      `puzzles`, nên tiến độ của nó bị từ chối vĩnh viễn (23503) và banner "chưa
+      đồng bộ" không bao giờ tắt. Không có gì trong hệ thống chịu trách nhiệm
+      nhận ra khoảng chênh này: outbox chỉ ghi lại ý định tại thời điểm tô, nên
+      tranh tạo ra trước khi có chức năng đồng bộ — hoặc lúc mất mạng rồi mục
+      outbox bị dọn — thì không ai đẩy lên nữa.
+
+      Đo trên bản chạy thật: máy có 5 tranh, server chỉ có 3; garchomp và
+      charmander không bao giờ lên được.
+
+      LƯU Ý: một tranh đã bị XOÁ ở máy khác cũng "chỉ có trong máy" và sẽ được
+      đẩy lên lại. Với app một người dùng thì đó là lựa chọn đúng — mất bản đã tô
+      tệ hơn nhiều so với việc một tranh xoá rồi hiện lại; và xoá tại máy này thì
+      xoá luôn bản cục bộ nên không rơi vào nhánh này.
+    */
+    const remoteIds = new Set(remote.map((r) => r.id))
+    for (const p of local) {
+      if (remoteIds.has(p.id) || pendingDelete.has(p.id)) continue
+      await enqueueOutbox('puzzle', p.id)
+      /*
+        Xếp hàng luôn cả TIẾN ĐỘ. Vòng lặp `remote` ở trên đọc danh sách server
+        TRƯỚC khi tranh này được đẩy lên, nên nó không hợp nhất tiến độ của tranh
+        này — phải đợi tới lượt đồng bộ SAU. Đo trên Supabase thật: hàng `puzzles`
+        và 3 tệp Storage lên đủ, nhưng bảng `progress` rỗng; đổi máy ngay lúc đó
+        là thấy 0% trên một bức đã tô dở.
+
+        `drainOutbox` xử lý 'puzzle' TRƯỚC 'progress' nên khoá ngoại được thoả
+        ngay trong cùng một lượt. Tranh chưa tô thì mục này là việc rỗng và tự bị
+        xoá, không đọng lại.
+      */
+      await enqueueOutbox('progress', p.id)
+      enqueued++
+    }
   } catch {
     // không có mạng / chưa cấu hình Supabase — im lặng, dùng dữ liệu cục bộ
   }
 
-  return { pulled, merged }
+  return { pulled, merged, enqueued }
 }

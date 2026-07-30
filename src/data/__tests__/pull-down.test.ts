@@ -121,7 +121,7 @@ describe('pullPuzzle', () => {
 describe('pullDown', () => {
   it('server rỗng ⇒ không kéo gì', async () => {
     setSupabaseForTests(fakeClient().client)
-    expect(await pullDown(OWNER)).toEqual({ pulled: 0, merged: 0 })
+    expect(await pullDown(OWNER)).toEqual({ pulled: 0, merged: 0, enqueued: 0 })
   })
 
   /**
@@ -204,6 +204,6 @@ describe('pullDown', () => {
         throw new Error('offline')
       },
     } as never)
-    await expect(pullDown(OWNER)).resolves.toEqual({ pulled: 0, merged: 0 })
+    await expect(pullDown(OWNER)).resolves.toEqual({ pulled: 0, merged: 0, enqueued: 0 })
   })
 })

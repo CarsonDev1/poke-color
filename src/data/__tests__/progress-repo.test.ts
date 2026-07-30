@@ -175,7 +175,7 @@ describe('syncProgress', () => {
       }).client,
     )
 
-    const merged = await syncProgress('p1', USER, REGIONS)
+    const { merged } = await syncProgress('p1', USER, REGIONS)
 
     // kết quả trả về
     expect(merged!.filledCount).toBe(3)
@@ -225,7 +225,7 @@ describe('syncProgress', () => {
     let sent: Record<string, unknown> | null = null
     setSupabaseForTests(fakeClient({ onUpsert: (r) => (sent = r) }).client)
 
-    const merged = await syncProgress('p1', USER, REGIONS)
+    const { merged } = await syncProgress('p1', USER, REGIONS)
     expect(merged!.filledCount).toBe(3)
     expect(sent).not.toBeNull()
   })
@@ -234,14 +234,17 @@ describe('syncProgress', () => {
     setSupabaseForTests(
       fakeClient({ selectResult: { data: row([4, 5]), error: null } }).client,
     )
-    const merged = await syncProgress('p1', USER, REGIONS)
+    const { merged } = await syncProgress('p1', USER, REGIONS)
     expect(merged!.filledCount).toBe(2)
     expect((await loadProgress('p1'))!.filledCount).toBe(2)
   })
 
   it('không có gì cả ⇒ null, không tạo bản ghi rỗng', async () => {
     setSupabaseForTests(fakeClient({}).client)
-    expect(await syncProgress('p1', USER, REGIONS)).toBeNull()
+    const out = await syncProgress('p1', USER, REGIONS)
+    expect(out.merged).toBeNull()
+    // việc rỗng: không có tiến độ nào để đẩy, nên mục outbox bị xoá thay vì kẹt
+    expect(out.nothingToPush).toBe(true)
     expect(await loadProgress('p1')).toBeUndefined()
   })
 
@@ -250,8 +253,8 @@ describe('syncProgress', () => {
     setSupabaseForTests(
       fakeClient({ selectResult: { data: row([3]), error: null } }).client,
     )
-    const first = await syncProgress('p1', USER, REGIONS)
-    const second = await syncProgress('p1', USER, REGIONS)
+    const { merged: first } = await syncProgress('p1', USER, REGIONS)
+    const { merged: second } = await syncProgress('p1', USER, REGIONS)
     expect(second!.filledCount).toBe(first!.filledCount)
     expect(Array.from(second!.filled)).toEqual(Array.from(first!.filled))
   })
