@@ -14,6 +14,12 @@ export interface SyncState {
    * IndexedDB mà màn hình vẫn trống tới khi người dùng tự F5.
    */
   pulledAt: number
+  /**
+   * `true` khi lượt đồng bộ VỪA XONG mà số việc chờ KHÔNG giảm. Cần cho banner
+   * nói thật: nếu không có cờ này, người dùng bấm "Đồng bộ ngay" và thấy y nguyên
+   * "chưa đồng bộ · N" — không biết là đang chạy, đã thất bại, hay nút bị kẹt.
+   */
+  stuck: boolean
   /** đẩy ngay, không đợi sự kiện online */
   syncNow: () => void
 }
@@ -30,6 +36,7 @@ export function useSync(): SyncState {
   )
   const [syncing, setSyncing] = useState(false)
   const [pulledAt, setPulledAt] = useState(0)
+  const [stuck, setStuck] = useState(false)
   /**
    * Chặn HAI LƯỢT ĐỒNG BỘ CHẠY SONG SONG.
    *
@@ -60,7 +67,9 @@ export function useSync(): SyncState {
       // ĐẨY trước rồi mới KÉO: đẩy trước thì việc tô ở máy này lên server đã,
       // sau đó kéo về sẽ hợp nhất được cả hai phía. Kéo trước rồi đẩy thì lượt
       // hợp nhất bỏ sót đúng những gì vừa tô ở máy này.
-      await drainOutbox(SOLO_USER_ID)
+      const drained = await drainOutbox(SOLO_USER_ID)
+      // Kẹt = còn việc chờ mà lượt này KHÔNG đẩy được cũng KHÔNG bỏ được cái nào.
+      setStuck(drained.remaining > 0 && drained.done === 0 && drained.dropped === 0)
       const out = await pullDown(SOLO_USER_ID)
       if (out.pulled > 0 || out.merged > 0) setPulledAt(Date.now())
     } finally {
@@ -96,5 +105,5 @@ export function useSync(): SyncState {
     void run()
   }, [run])
 
-  return { pending, online, syncing, pulledAt, syncNow }
+  return { pending, online, syncing, pulledAt, stuck, syncNow }
 }

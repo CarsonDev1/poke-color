@@ -8,7 +8,7 @@ import type { SyncState } from '@/ui/hooks/use-sync'
  * bỏ qua chính chỗ mà lát nữa sẽ báo lỗi thật.
  */
 export function SyncBanner({ state }: { state: SyncState }) {
-  const { pending, online, syncing } = state
+  const { pending, online, syncing, stuck } = state
 
   if (!online) {
     return (
@@ -30,11 +30,17 @@ export function SyncBanner({ state }: { state: SyncState }) {
   }
 
   if (pending > 0) {
+    // NÓI THẬT khi đã thử mà không đẩy được. Bản trước luôn hiện đúng một câu và
+    // một nút, nên người dùng bấm rồi thấy y nguyên và tưởng nút bị kẹt.
     return (
       <div role="status" style={wrap('#fef9c3', '#854d0e')}>
-        <span>Chưa đồng bộ · {pending} thay đổi</span>
+        <span>
+          {stuck
+            ? `Không đẩy được ${pending} thay đổi lên máy chủ — sẽ tự thử lại.`
+            : `Chưa đồng bộ · ${pending} thay đổi`}
+        </span>
         <button type="button" onClick={state.syncNow} style={btn}>
-          Đồng bộ ngay
+          {stuck ? 'Thử lại' : 'Đồng bộ ngay'}
         </button>
       </div>
     )

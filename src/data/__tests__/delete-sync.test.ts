@@ -249,3 +249,57 @@ describe('xoá rồi đồng bộ — không được SỐNG LẠI', () => {
     expect(order[0]).toBe('delete:p1')
   })
 })
+
+describe('mục outbox KHÔNG BAO GIỜ đẩy được thì phải BỎ', () => {
+  /**
+   * Đây là lỗi "bấm đồng bộ mà nút vẫn hiện": một mục 'progress' của puzzle đã
+   * không còn trong máy thì `loadPuzzleRecord` trả undefined, và bản cũ `continue`
+   * mà KHÔNG dequeue — mục nằm lại vĩnh viễn, `pending` không bao giờ về 0, banner
+   * luôn hiện và bấm bao nhiêu lần cũng không đổi gì.
+   *
+   * Bỏ mục đó là đúng, không phải mất dữ liệu: nguồn đã không còn nên không có gì
+   * để đẩy lên. Việc xoá trên server là một mục 'delete' RIÊNG.
+   */
+  it("'progress' của puzzle không còn trong máy ⇒ BỎ, không giữ mãi", async () => {
+    await enqueueOutbox('progress', 'khong-ton-tai')
+    setSupabaseForTests(fakeClient([]).client)
+
+    const out = await drainOutbox(OWNER)
+    expect(out.dropped).toBe(1)
+    expect(out.remaining).toBe(0)
+    expect(await listOutbox()).toHaveLength(0)
+  })
+
+  it("'puzzle' của puzzle không còn trong máy ⇒ BỎ", async () => {
+    await enqueueOutbox('puzzle', 'khong-ton-tai')
+    setSupabaseForTests(fakeClient([]).client)
+
+    const out = await drainOutbox(OWNER)
+    expect(out.dropped).toBe(1)
+    expect(await listOutbox()).toHaveLength(0)
+  })
+
+  /**
+   * Ngược lại: mục 'delete' KHÔNG được bỏ khi đẩy thất bại. Mất mạng không phải
+   * lý do để quên ý định xoá của người dùng.
+   */
+  it("'delete' đẩy thất bại thì GIỮ để thử lại, không bỏ", async () => {
+    await enqueueOutbox('delete', 'p1')
+    setSupabaseForTests(fakeClient(['p1'], { deleteFails: true }).client)
+
+    const out = await drainOutbox(OWNER)
+    expect(out.dropped).toBe(0)
+    expect(out.remaining).toBe(1)
+  })
+
+  it('drain hai lần liên tiếp ⇒ outbox về 0 và ở đó (không kẹt)', async () => {
+    await enqueueOutbox('progress', 'mat-roi')
+    await enqueueOutbox('puzzle', 'mat-roi-2')
+    setSupabaseForTests(fakeClient([]).client)
+
+    await drainOutbox(OWNER)
+    expect(await listOutbox()).toHaveLength(0)
+    const again = await drainOutbox(OWNER)
+    expect(again).toEqual({ done: 0, remaining: 0, dropped: 0 })
+  })
+})

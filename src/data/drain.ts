@@ -1,4 +1,10 @@
-import { dequeueOutbox, listOutbox, listPuzzles, loadPuzzleRecord } from '@/data/local-cache'
+import {
+  dequeueOutbox,
+  listOutbox,
+  listPuzzles,
+  loadBlobs,
+  loadPuzzleRecord,
+} from '@/data/local-cache'
 import { syncProgress } from '@/data/progress-repo'
 import {
   deleteRemotePuzzle,
@@ -18,6 +24,13 @@ export interface DrainOutcome {
   done: number
   /** số việc còn lại (thất bại, sẽ thử lại lần sau) */
   remaining: number
+  /**
+   * Số việc bị BỎ vì không bao giờ làm được nữa — puzzle đã không còn trong máy
+   * nên không có gì để đẩy lên. Trước đây những mục này bị `continue` mà KHÔNG
+   * dequeue, nên chúng nằm lại vĩnh viễn: banner "chưa đồng bộ · 1" không bao giờ
+   * tắt và bấm "Đồng bộ ngay" bao nhiêu lần cũng vô ích.
+   */
+  dropped: number
 }
 
 /**
@@ -32,7 +45,7 @@ export interface DrainOutcome {
  */
 export async function drainOutbox(userId: string): Promise<DrainOutcome> {
   const items = await listOutbox()
-  if (items.length === 0) return { done: 0, remaining: 0 }
+  if (items.length === 0) return { done: 0, remaining: 0, dropped: 0 }
 
   // Thứ tự: 'delete' → 'puzzle' → 'progress'.
   //
@@ -48,24 +61,48 @@ export async function drainOutbox(userId: string): Promise<DrainOutcome> {
   )
 
   let done = 0
+  let dropped = 0
+
   for (const item of ordered) {
     try {
       if (item.kind === 'delete') {
+        // Xoá thì THỬ LẠI mãi, không bỏ: mất mạng không phải lý do để quên ý
+        // định xoá của người dùng.
         if (await deleteRemotePuzzle(item.puzzleId, userId)) {
           await dequeueOutbox('delete', item.puzzleId)
           done++
         }
         continue
       }
+
+      /*
+        Puzzle KHÔNG CÒN trong máy ⇒ mục này KHÔNG BAO GIỜ đẩy được, phải BỎ.
+
+        Trước đây chỗ này `continue` mà không dequeue, nên mục nằm lại vĩnh viễn:
+        `pending` không bao giờ về 0, banner "chưa đồng bộ · N" luôn hiện, và bấm
+        "Đồng bộ ngay" bao nhiêu lần cũng không đổi gì — đúng lỗi đã gặp.
+
+        Bỏ là đúng chứ không phải mất dữ liệu: dữ liệu nguồn đã không còn, nên
+        không có gì để đẩy lên. Việc xoá trên server (nếu cần) là một mục 'delete'
+        riêng, không liên quan tới mục này.
+      */
+      const rec = await loadPuzzleRecord(item.puzzleId)
+      if (!rec) {
+        await dequeueOutbox(item.kind, item.puzzleId)
+        dropped++
+        continue
+      }
+
       if (item.kind === 'puzzle') {
+        // Thiếu blob thì cũng không đẩy được — cùng lý do như trên.
+        if (!(await loadBlobs(item.puzzleId))) {
+          await dequeueOutbox('puzzle', item.puzzleId)
+          dropped++
+          continue
+        }
         const r = await uploadPuzzle(item.puzzleId, userId)
         if (r.ok) done++
       } else {
-        const rec = await loadPuzzleRecord(item.puzzleId)
-        // Không biết regionCount thì không dựng lại bitset được. Puzzle đã bị
-        // xoá cục bộ mà outbox còn sót — bỏ qua, `deletePuzzle` đã lo dọn nên
-        // đây chỉ là lưới an toàn.
-        if (!rec) continue
         await syncProgress(item.puzzleId, userId, rec.regionCount)
         done++
       }
@@ -75,7 +112,7 @@ export async function drainOutbox(userId: string): Promise<DrainOutcome> {
   }
 
   const left = await listOutbox()
-  return { done, remaining: left.length }
+  return { done, remaining: left.length, dropped }
 }
 
 export interface PullOutcome {

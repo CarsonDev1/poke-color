@@ -71,7 +71,7 @@ describe('drainOutbox', () => {
   it('outbox rỗng ⇒ không gọi mạng', async () => {
     const f = fakeClient()
     setSupabaseForTests(f.client)
-    expect(await drainOutbox(USER)).toEqual({ done: 0, remaining: 0 })
+    expect(await drainOutbox(USER)).toEqual({ done: 0, remaining: 0, dropped: 0 })
     expect(f.order).toEqual([])
   })
 
