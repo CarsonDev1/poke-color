@@ -67,7 +67,12 @@ interface BlobRecord {
  * trạng thái cũ hơn trạng thái đang có trong máy.
  */
 export interface OutboxItem {
-  kind: 'progress' | 'puzzle'
+  /**
+   * `'delete'` PHẢI tồn tại như một việc chờ riêng. Xoá cục bộ mà không đánh dấu
+   * thì lượt đồng bộ kế tiếp thấy server còn puzzle đó và KÉO NÓ VỀ LẠI — người
+   * dùng xoá xong thấy nó xuất hiện lại, đúng lỗi đã gặp.
+   */
+  kind: 'progress' | 'puzzle' | 'delete'
   puzzleId: string
   queuedAt: number
 }
@@ -263,6 +268,8 @@ export async function deletePuzzle(id: string): Promise<void> {
   // puzzle không còn tồn tại, và banner "chưa đồng bộ · 1" không bao giờ tắt.
   await tx.objectStore('outbox').delete(['progress', id])
   await tx.objectStore('outbox').delete(['puzzle', id])
+  // KHÔNG xoá mục 'delete': nó là việc chờ đẩy lệnh xoá lên server. Xoá nó ở đây
+  // là mất luôn ý định xoá, và puzzle sẽ bị kéo về lại.
   await tx.done
 }
 

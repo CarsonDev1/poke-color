@@ -194,4 +194,31 @@ export async function pullPuzzle(remote: RemotePuzzle, ownerId: string): Promise
   }
 }
 
+/**
+ * XOÁ một puzzle khỏi Supabase: 3 tệp Storage rồi tới hàng trong `puzzles`.
+ *
+ * Thứ tự NGƯỢC với lúc tải lên có chủ đích. Upload thì tệp trước hàng sau (để
+ * hàng không bao giờ trỏ tới tệp thiếu). Xoá thì tệp trước hàng sau cũng đúng:
+ * nếu xoá hàng trước mà xoá tệp lỗi, ta còn tệp mồ côi KHÔNG ai tham chiếu —
+ * chỉ tốn dung lượng. Ngược lại, xoá tệp xong mà hàng còn thì thư viện có một
+ * puzzle mở ra là lỗi.
+ *
+ * `progress` và `daily_activity` tự biến mất nhờ `on delete cascade` trong
+ * migration — không cần xoá tay.
+ */
+export async function deleteRemotePuzzle(puzzleId: string, ownerId: string): Promise<boolean> {
+  const paths = storagePaths(ownerId, puzzleId)
+  try {
+    const supabase = await getSupabase()
+    // Không kiểm lỗi remove: tệp có thể đã bị xoá ở lần thử trước, và "không tìm
+    // thấy" không phải lý do để bỏ dở việc xoá hàng.
+    await supabase.storage.from(BUCKET).remove([paths.original, paths.puzzle, paths.regions])
+
+    const { error } = await supabase.from('puzzles').delete().eq('id', puzzleId)
+    return !error
+  } catch {
+    return false
+  }
+}
+
 export type { PuzzleRecord }

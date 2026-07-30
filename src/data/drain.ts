@@ -1,6 +1,11 @@
-import { listOutbox, listPuzzles, loadPuzzleRecord } from '@/data/local-cache'
+import { dequeueOutbox, listOutbox, listPuzzles, loadPuzzleRecord } from '@/data/local-cache'
 import { syncProgress } from '@/data/progress-repo'
-import { listRemotePuzzles, pullPuzzle, uploadPuzzle } from '@/data/puzzle-repo'
+import {
+  deleteRemotePuzzle,
+  listRemotePuzzles,
+  pullPuzzle,
+  uploadPuzzle,
+} from '@/data/puzzle-repo'
 
 /**
  * File riêng, KHÔNG nhập vào `sync.ts`, để tránh vòng import: `progress-repo`
@@ -29,15 +34,29 @@ export async function drainOutbox(userId: string): Promise<DrainOutcome> {
   const items = await listOutbox()
   if (items.length === 0) return { done: 0, remaining: 0 }
 
-  // 'puzzle' trước 'progress'
-  const ordered = [...items].sort((a, b) => {
-    if (a.kind === b.kind) return a.queuedAt - b.queuedAt
-    return a.kind === 'puzzle' ? -1 : 1
-  })
+  // Thứ tự: 'delete' → 'puzzle' → 'progress'.
+  //
+  //  - 'delete' trước tiên: nếu để sau, một mục 'puzzle' còn sót có thể ĐẨY LẠI
+  //    puzzle vừa xoá lên server, rồi 'delete' xoá đi — hoặc tệ hơn, đúng thứ tự
+  //    ngược lại thì puzzle sống lại.
+  //  - 'puzzle' trước 'progress': `progress.puzzle_id` có khoá ngoại tới
+  //    `puzzles`, đẩy tiến độ của puzzle chưa tồn tại là lỗi khoá ngoại và không
+  //    bao giờ tự khỏi.
+  const RANK = { delete: 0, puzzle: 1, progress: 2 } as const
+  const ordered = [...items].sort(
+    (a, b) => RANK[a.kind] - RANK[b.kind] || a.queuedAt - b.queuedAt,
+  )
 
   let done = 0
   for (const item of ordered) {
     try {
+      if (item.kind === 'delete') {
+        if (await deleteRemotePuzzle(item.puzzleId, userId)) {
+          await dequeueOutbox('delete', item.puzzleId)
+          done++
+        }
+        continue
+      }
       if (item.kind === 'puzzle') {
         const r = await uploadPuzzle(item.puzzleId, userId)
         if (r.ok) done++
@@ -86,10 +105,23 @@ export async function pullDown(userId: string): Promise<PullOutcome> {
   let merged = 0
 
   try {
-    const [remote, local] = await Promise.all([listRemotePuzzles(userId), listPuzzles()])
+    const [remote, local, outbox] = await Promise.all([
+      listRemotePuzzles(userId),
+      listPuzzles(),
+      listOutbox(),
+    ])
     const localIds = new Set(local.map((p) => p.id))
+    /**
+     * Id đang CHỜ XOÁ. Bỏ qua chúng là bắt buộc: nếu lệnh xoá chưa đẩy được lên
+     * server (mất mạng), server vẫn còn puzzle đó và nếu kéo về thì puzzle vừa
+     * xoá sẽ SỐNG LẠI ngay trước mắt người dùng.
+     */
+    const pendingDelete = new Set(
+      outbox.filter((o) => o.kind === 'delete').map((o) => o.puzzleId),
+    )
 
     for (const r of remote) {
+      if (pendingDelete.has(r.id)) continue
       try {
         if (!localIds.has(r.id)) {
           if (await pullPuzzle(r, userId)) {

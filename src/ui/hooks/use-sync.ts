@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { drainOutbox, pullDown } from '@/data/drain'
 import { countOutbox } from '@/data/local-cache'
 import { SOLO_USER_ID } from '@/data/solo'
@@ -30,6 +30,19 @@ export function useSync(): SyncState {
   )
   const [syncing, setSyncing] = useState(false)
   const [pulledAt, setPulledAt] = useState(0)
+  /**
+   * Chặn HAI LƯỢT ĐỒNG BỘ CHẠY SONG SONG.
+   *
+   * StrictMode mount effect hai lần, và sự kiện `online` có thể tới đúng lúc —
+   * nên `run()` bị gọi chồng. Đo bằng CDP thấy rõ: `pullDown` của lượt này chạy
+   * XEN VÀO GIỮA `drainOutbox` của lượt kia, và một mục 'delete' bị xử lý hai
+   * lần. Ngoài việc gấp đôi request, nó còn làm mọi phép đo trở nên vô nghĩa vì
+   * thứ tự đẩy-rồi-kéo không còn được bảo đảm.
+   *
+   * Dùng ref chứ không state: cờ này KHÔNG được kéo theo re-render, và phải đọc
+   * được ngay lập tức trong cùng một tick.
+   */
+  const running = useRef(false)
 
   const refresh = useCallback(async () => {
     try {
@@ -40,6 +53,8 @@ export function useSync(): SyncState {
   }, [])
 
   const run = useCallback(async () => {
+    if (running.current) return
+    running.current = true
     setSyncing(true)
     try {
       // ĐẨY trước rồi mới KÉO: đẩy trước thì việc tô ở máy này lên server đã,
@@ -49,6 +64,7 @@ export function useSync(): SyncState {
       const out = await pullDown(SOLO_USER_ID)
       if (out.pulled > 0 || out.merged > 0) setPulledAt(Date.now())
     } finally {
+      running.current = false
       setSyncing(false)
       await refresh()
     }

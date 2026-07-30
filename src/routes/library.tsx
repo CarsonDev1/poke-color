@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import {
   deletePuzzle,
+  enqueueOutbox,
   listPuzzles,
   loadProgress,
   loadThumbnail,
@@ -81,6 +82,21 @@ export default function LibraryRoute() {
   const remove = async (id: string): Promise<void> => {
     try {
       await deletePuzzle(id)
+      // Đánh dấu xoá TRÊN SERVER. Không có bước này thì xoá chỉ là cục bộ, và
+      // lượt đồng bộ kế tiếp thấy server còn puzzle đó rồi KÉO VỀ LẠI — người
+      // dùng xoá xong thấy nó xuất hiện lại. Bọc try riêng: dữ liệu cục bộ đã
+      // xoá xong nên lỗi đánh dấu không được làm thao tác trông như thất bại.
+      try {
+        await enqueueOutbox('delete', id)
+      } catch {
+        // sẽ không xoá được trên server, nhưng cục bộ đã sạch
+      }
+      // ĐẨY LỆNH XOÁ LÊN NGAY, không đợi lần mount sau. Trước đây marker 'delete'
+      // nằm chờ trong outbox tới khi `useSync` mount lại — nghĩa là người dùng xoá
+      // rồi đóng tab thì lệnh xoá chưa bao giờ tới server, và lần mở app sau
+      // `pullDown` thấy server còn puzzle đó rồi kéo về lại.
+      sync.syncNow()
+
       const next = await reload()
       // Bẫy rò rỉ: `reload()` ở trên vừa tạo một lô URL thumbnail MỚI cho các
       // card còn lại. Nếu lắp `next` vào state mà không thu hồi lô CŨ
